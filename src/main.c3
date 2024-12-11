@@ -37,6 +37,7 @@ enum InstructionType : char
     JZ,
     INC,
     DEC,
+    // Will cease to exist once I create a stdout device
     PRINT,
     MOV,
     RET,
@@ -67,15 +68,15 @@ fn int main(String[] args)
 {
 
     
-    Instruction test = {.type = MOV, .width = W8, .src_type = NUM, .dst_type = REG};
+    Instruction test = {.type = MOV, .width = W8, .src_type = REG, .dst_type = REG};
 
     io::printfn("test: %.4x 00b6: \u00b6", (InstSize)test); 
 
 
-    // Theoretically moves 'a' (61) to register 0, 0e06 = Instruction {.type = MOV, .width = W8, .src_type = NUM, .dst_type = REG}, 61 = 'a', 00 = eax / r0
+    // Theoretically moves 'a' (61) to register 0, 0906 = Instruction {.type = MOV, .width = W8, .src_type = NUM, .dst_type = REG}, 61 = 'a', 00 = eax / r0
     // Then prints it with 0005
     //char[] prog = args[1].to_int(16)!!;
-    char[*] prog = x"090648000005090649000005094600b600000509060A000005";
+    char[*] prog = x"090648000005090649000005094600b600000509060A010a0601020a060200000500000000000000050008 12891419f241";
 
     io::print("Executing: ");
     foreach (c : prog)
@@ -87,7 +88,14 @@ fn int main(String[] args)
     bool running = true;
 
     Cpu cpu;
-    while (running && cpu.inst_ptr < prog.len)
+
+    DString inst_buf;
+    inst_buf.new_init();
+    defer inst_buf.free();
+
+    io::printn("Output: ");
+
+    while (running)
     {
         // Fetch, Decode, Execute
         // https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#fetchdecodeexecute-loop
@@ -97,7 +105,8 @@ fn int main(String[] args)
         // Fetch & Decode the current instruction
         Instruction curr_inst = (Instruction)(InstSize)((prog[cpu.inst_ptr] << 8) + prog[cpu.inst_ptr + 1]);
 
-        io::printfn("%.4x", (InstSize)curr_inst);
+        inst_buf.appendf("%.4x -> %s %s %s %s\n", (InstSize)curr_inst, curr_inst.type, curr_inst.width, curr_inst.dst_type, curr_inst.src_type);
+        //io::printfn("%.4x %s %s %s %s", (InstSize)curr_inst, curr_inst.type, curr_inst.width, curr_inst.dst_type, curr_inst.src_type);
 
         // Point at the next byte
         cpu.inst_ptr += 2;
@@ -116,6 +125,7 @@ fn int main(String[] args)
                         cpu.inst_ptr += curr_inst.width.size;
                     case REG:
                         src = prog[cpu.inst_ptr:1];
+                        //src = (char*)
                         cpu.inst_ptr += 1;
                     default:
                         error("found %s", curr_inst.src_type);
@@ -135,7 +145,15 @@ fn int main(String[] args)
                 switch (curr_inst.dst_type)
                 {
                     case REG:
-                        cpu.registers[dst[0]] = to_usize(curr_inst.width, src);
+                        switch (curr_inst.src_type)
+                        {
+                            case NUM:
+                                cpu.registers[dst[0]] = to_usize(curr_inst.width, src);
+                            case REG:
+                                cpu.registers[dst[0]] = cpu.registers[src[0]];
+                            default:
+                                error("found %s", curr_inst.src_type);
+                        }
                     default:
                         error("found %s", curr_inst.dst_type);
                 }
@@ -145,10 +163,15 @@ fn int main(String[] args)
                 io::printf("%c", cpu.registers[0]);
             case EXIT:
                 running = false;
+            case NOP:
+                break;
             default:
                 error("Instruction %s not implemented yet", curr_inst.type);
         }
     }
+
+    io::printn("Produced by instructions:");
+    io::printf(inst_buf.str_view());
 
     return 0;
 }
@@ -161,6 +184,8 @@ fn USize to_usize(BitWidth width, char[] src)
             return src[0];
         case W16:
             return ((USize)src[0] << 8) + src[1];
+        case W64:
+            return ((USize)src[0] << 56) + ((USize)src[1] << 48) + ((USize)src[2] << 40) + ((USize)src[3] << 32) + ((USize)src[4] << 24) + ((USize)src[5] << 16) + ((USize)src[6] << 8) + src[7];
         default:
             error("%s not implimented", width);
     }
