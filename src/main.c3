@@ -340,9 +340,9 @@ fn USize to_usize(BitWidth src_width, char[] src)
         case W8:
             return src[0];
         case W16:
-            return *(USize*)(char*)char[]{src[1], src[0]};
+            return *(USize*)(char*)char[]{src[1], src[0], 0, 0, 0, 0, 0, 0};
         case W32:
-            return *(USize*)(char*)char[]{src[3], src[2], src[1], src[0]};
+            return *(USize*)(char*)char[]{src[3], src[2], src[1], src[0], 0, 0, 0, 0};
         case W64:
             return *(USize*)(char*)char[]{src[7], src[6], src[5], src[4], src[3], src[2], src[1], src[0]};
 
