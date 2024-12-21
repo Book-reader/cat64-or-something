@@ -121,36 +121,18 @@ fn int main(String[] args)
 
     char[*] prog = x"84e9 00000000000000ff 01 8589 01 00 8007 84e5 0000000000000001 01 8382 00 00 8004 000000000000000b 900b";
 
-//"09c7 00000000000000ff 01 0b07 01 00 0005 09c3 0000000000000001 01 0903 01 02 0501 000000000000000b 0009";
     mem[0:prog.len] = prog;
 
-    mem[0xff:14] = "hello, world!\n\0";
-
-    // io::printfn("%.4x == %.4x == %.2x%.2x: %s", to_usize(W16, mem[0..1]), @to_usize(W16, mem[0..1]), mem[0], mem[1], to_usize(W16, mem[0..1]) == @to_usize(W16, mem[0..1]));
-
-/*
-    usz s = $$sysclock();
-
-    usz x;
-    for (usz i = 0; i < 10000000; i++)
+    if (args.len > 1)
     {
-            x += (usz)(char*)@to_bytes(i);
+        mem[0xff:args[1].len] = args[1];
     }
-    usz e = $$sysclock();
-    io::printfn("to_bytes: %s;; %s", e - s, x);
-//libc::exit(0);
-    s = $$sysclock();
-
-    x;
-    for (usz i = 0; i < 10000000; i++)
+    else
     {
-        x += @to_usize(W64, mem[i:8]);
+        mem[0xff:14] = "hello, world!\n\0";
     }
 
-    e = $$sysclock();
 
-    io::printfn(" to_usize: %s;; %s", e - s, x);
-*/
     io::printf("Executing (%s b): ", prog.len);
     foreach (c : prog)
     {
@@ -226,6 +208,8 @@ fn int main(String[] args)
                             default:
                                 error("found %s", curr_inst.src_type);
                         }
+                    case NUM:
+                        error("Destination of MOV cannot be NUM");
                     default:
                         error("found %s", curr_inst.dst_type);
                 }
@@ -300,35 +284,14 @@ fn int main(String[] args)
     return 0;
 }
 
-/*fn USize to_usize(BitWidth width, char[] src)
-{
-    switch (width)
-    {
-        case W8:
-            return src[0];
-        case W16:
-            return ((USize)src[0] << 8) + src[1];
-        case W32:
-            return ((USize)src[0] << 24) + ((USize)src[1] << 16) + ((USize)src[2] << 8) + src[3];
-        case W64:
-            return ((USize)src[0] << 56) + ((USize)src[1] << 48) + ((USize)src[2] << 40) + ((USize)src[3] << 32) + ((USize)src[4] << 24) + ((USize)src[5] << 16) + ((USize)src[6] << 8) + src[7];
-        default:
-            error("%s not implimented", width);
-    }
-}*/
-
 macro USize @read(Instruction* &inst, #type)
 {
     USize out;
     switch (inst.#type)
     {
         case NUM:
-            //$if (/*inst.type == MOV && */$stringify(#type) == "src_type"):
                 out = to_usize(inst.width, mem[cpu.inst_ptr:inst.width.size]);
                 cpu.inst_ptr += inst.width.size;
-            //$else
-            //    error("Destination of MOV cannot be NUM");
-            //$endif
         case REG:
             out = mem[cpu.inst_ptr];
             cpu.inst_ptr += 1;
@@ -371,8 +334,6 @@ fn USize to_usize(BitWidth src_width, char[] src)
 
 fn char[] to_bytes(BitWidth dst_width, USize data)
 {
-    // Always ulong? @to_usize why have you forsaken me?
-    // io::printfn("to_bytes: %s %s", data, $typeof(data).nameof);
     char* src = (char*)&data;
     switch (dst_width)
     {
@@ -384,5 +345,5 @@ fn char[] to_bytes(BitWidth dst_width, USize data)
            return {src[3], src[2], src[1], src[0]};
         case W64:
             return {src[7], src[6], src[5], src[4], src[3], src[2], src[1], src[0]};
-    }//$endswitch
+    }
 }
