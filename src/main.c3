@@ -119,7 +119,7 @@ fn int main(String[] args)
 
     io::printfn("test: %.4x 00b6: \u00b6", (InstSize)test); 
 
-    char[*] prog = x"84e9 00000000000000ff 01 8589 01 00 8007 84e5 0000000000000001 01 8001 000000000000000b 900b";
+    char[*] prog = x"84e9 00000000000000ff 01 8589 01 00 8007 84e5 0000000000000001 01 8382 00 00 8004 000000000000000b 900b";
 
 //"09c7 00000000000000ff 01 0b07 01 00 0005 09c3 0000000000000001 01 0903 01 02 0501 000000000000000b 0009";
     mem[0:prog.len] = prog;
@@ -237,8 +237,8 @@ fn int main(String[] args)
                 $else
                     io::printf("%c", to_usize(W64, &cpu.registers[0]));
                 $endif
-                if (to_usize(W64, &cpu.registers[0]) == 0)
-                {io::printn("exiting hackishly (tried to print 0)\n"); running=false;}
+                // if (to_usize(W64, &cpu.registers[0]) == 0)
+                // {io::printn("exiting hackishly (tried to print 0)\n"); running=false;}
             case PRINT:
                 io::printf("%s", (ZString)mem[to_usize(W64, &cpu.registers[0])..]);
             case ADD:
@@ -263,8 +263,28 @@ fn int main(String[] args)
             case CMP:
                 USize src = @read(curr_inst, src_type);
                 USize dst = @read(curr_inst, dst_type);
+// io::printfn("comparing %s and %s: %s", src, dst, src == dst);
+                cpu.f_zero = src == dst;
+                // TODO: set cpu.f_carry
 
-
+            case JZ:
+                if (cpu.f_zero)
+                {
+                    cpu.inst_ptr = to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
+                }
+                else
+                {
+                    cpu.inst_ptr += USize.sizeof;
+                }
+            case JNZ:
+                if (!cpu.f_zero)
+                {
+                    cpu.inst_ptr = to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
+                }
+                else
+                {
+                    cpu.inst_ptr += USize.sizeof;
+                }
             case EXIT:
                 running = false;
             case NOP:
@@ -303,12 +323,12 @@ macro USize @read(Instruction* &inst, #type)
     switch (inst.#type)
     {
         case NUM:
-            $if (/*inst.type == MOV && */$stringify(#type) == "src_type"):
-                out = to_usize(W64, mem[cpu.inst_ptr:inst.width.size]);
+            //$if (/*inst.type == MOV && */$stringify(#type) == "src_type"):
+                out = to_usize(inst.width, mem[cpu.inst_ptr:inst.width.size]);
                 cpu.inst_ptr += inst.width.size;
-            $else
-                error("Destination of MOV cannot be NUM");
-            $endif
+            //$else
+            //    error("Destination of MOV cannot be NUM");
+            //$endif
         case REG:
             out = mem[cpu.inst_ptr];
             cpu.inst_ptr += 1;
