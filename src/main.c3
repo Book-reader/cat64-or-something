@@ -68,12 +68,12 @@ enum InstructionType : char
     XNOR,
 }
 
-enum BitWidth : char (char size, String type)
+enum BitWidth : char (char size)
 {
-    W8 = { 1, "char" },
-    W16 = { 2, "ushort" },
-    W32 = { 4, "uint" },
-    W64 = { 8, "USize" },
+    W8 = 1,
+    W16 = 2,
+    W32 = 4,
+    W64 = 8,
 }
 
 enum OpType : char
@@ -123,7 +123,7 @@ fn int main(String[] args)
 
     mem[0xff:14] = "hello, world!\n\0";
 
-    // io::printfn("%.4x == %.4x == %.2x%.2x: %s", to_usize(W16, mem[0..1]), @to_size(W16, mem[0..1]), mem[0], mem[1], to_usize(W16, mem[0..1]) == @to_size(W16, mem[0..1]));
+    // io::printfn("%.4x == %.4x == %.2x%.2x: %s", to_usize(W16, mem[0..1]), @to_usize(W16, mem[0..1]), mem[0], mem[1], to_usize(W16, mem[0..1]) == @to_usize(W16, mem[0..1]));
 
 /*
     usz s = $$sysclock();
@@ -141,12 +141,12 @@ fn int main(String[] args)
     x;
     for (usz i = 0; i < 10000000; i++)
     {
-        x += @to_size(W64, mem[i:8]);
+        x += @to_usize(W64, mem[i:8]);
     }
 
     e = $$sysclock();
 
-    io::printfn(" to_size: %s;; %s", e - s, x);
+    io::printfn(" to_usize: %s;; %s", e - s, x);
 */
     io::printf("Executing (%s b): ", prog.len);
     foreach (c : prog)
@@ -164,7 +164,7 @@ fn int main(String[] args)
     io::printn("Output: ");
 
 
-    // io::printfn("%.4x %.4x %.4x", @to_size(W16, prog[0:2]), @to_size2(W16, prog[0:2]), @to_size3(W16, prog[0:2]));
+    // io::printfn("%.4x %.4x %.4x", @to_usize(W16, prog[0:2]), @to_usize2(W16, prog[0:2]), @to_usize3(W16, prog[0:2]));
 
     while (running)
     {
@@ -186,7 +186,7 @@ fn int main(String[] args)
         // Point at the next byte
         cpu.inst_ptr += 2;
 
-        //@to_bytes(@to_size(curr_inst.width, x"112233445566778899"));
+        //@to_bytes(@to_usize(curr_inst.width, x"112233445566778899"));
         /*if (cond is false)
         {
             continue;
@@ -201,8 +201,8 @@ fn int main(String[] args)
                 running = false;
 
             case MOV:
-                char[] src = @read(curr_inst, src_type);
-                char[] dst = @read(curr_inst, dst_type);
+                USize src = @read(curr_inst, src_type);
+                USize dst = @read(curr_inst, dst_type);
 
                 switch (curr_inst.dst_type)
                 {
@@ -210,12 +210,12 @@ fn int main(String[] args)
                         switch (curr_inst.src_type)
                         {
                             case NUM:
-                                // io::printfn("setting register %d containing %x to %x", dst[0], @to_size(W64, &cpu.registers[dst[0]]), @to_size(curr_inst.width, src[0:curr_inst.width.size]));
-                                cpu.registers[dst[0]][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = src[0:curr_inst.width.size];
+                                // io::printfn("setting register %d containing %x to %x", dst[0], @to_usize(W64, &cpu.registers[dst[0]]), @to_usize(curr_inst.width, src[0:curr_inst.width.size]));
+                                cpu.registers[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = to_bytes(curr_inst.width, src)[0:curr_inst.width.size];
                             case REG:
-                                cpu.registers[dst[0]] = cpu.registers[src[0]];
+                                cpu.registers[dst] = cpu.registers[src];
                             case REGPTR:
-                                cpu.registers[dst[0]][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = mem[@to_size(W64, src):curr_inst.width.size];
+                                cpu.registers[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = mem[src:curr_inst.width.size];
                             default:
                                 error("found %s", curr_inst.src_type);
                         }
@@ -223,21 +223,21 @@ fn int main(String[] args)
                         error("found %s", curr_inst.dst_type);
                 }
             case JMP:
-                cpu.inst_ptr = @to_size(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
+                cpu.inst_ptr = to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
             case PRINTC:
                 $if ($feature(DEBUG)):
-                    inst_buf.appendf("%c", @to_size(W64, &cpu.registers[0]));
+                    inst_buf.appendf("%c", to_usize(W64, &cpu.registers[0]));
                 $else
-                    io::printf("%c", @to_size(W64, &cpu.registers[0]));
+                    io::printf("%c", to_usize(W64, &cpu.registers[0]));
                 $endif
-                if (@to_size(W64, &cpu.registers[0]) == 0)
+                if (to_usize(W64, &cpu.registers[0]) == 0)
                 {io::printn("exiting hackishly (tried to print 0)\n"); running=false;}
             case PRINT:
-                io::printf("%s", (ZString)mem[@to_size(W64, &cpu.registers[0])..]);
+                io::printf("%s", (ZString)mem[to_usize(W64, &cpu.registers[0])..]);
             case ADD:
                 // io::printfn("%s", curr_inst.width);
-                char[] src = @read(curr_inst, src_type);
-                char[] dst = @read(curr_inst, dst_type);
+                USize src = @read(curr_inst, src_type);
+                USize dst = @read(curr_inst, dst_type);
 
                 switch (curr_inst.dst_type)
                 {
@@ -246,7 +246,7 @@ fn int main(String[] args)
                         {
                             case NUM:
                                 //cpu.registers[]
-                               cpu.registers[dst[0]][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = @to_bytes(@to_size(curr_inst.width, &cpu.registers[dst[0]]) + @to_size(curr_inst.width, src))[0:curr_inst.width.size];
+                               cpu.registers[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = to_bytes(curr_inst.width, to_usize(curr_inst.width, &cpu.registers[dst]) + src)[0:curr_inst.width.size];
                             default:
                                error("found %s", curr_inst.dst_type);
                         }
@@ -254,8 +254,8 @@ fn int main(String[] args)
                         error("found %s", curr_inst.dst_type);
                 }
             case CMP:
-                char[] src = @read(curr_inst, src_type);
-                char[] dst = @read(curr_inst, dst_type);
+                USize src = @read(curr_inst, src_type);
+                USize dst = @read(curr_inst, dst_type);
 
 
             case EXIT:
@@ -290,23 +290,23 @@ fn int main(String[] args)
     }
 }*/
 
-macro char[] @read(Instruction* &inst, #type)
+macro USize @read(Instruction* &inst, #type)
 {
-    char[] out;
+    USize out;
     switch (inst.#type)
     {
         case NUM:
             $if (/*inst.type == MOV && */$stringify(#type) == "src_type"):
-                out = mem[cpu.inst_ptr:inst.width.size];
+                out = to_usize(W64, mem[cpu.inst_ptr:inst.width.size]);
                 cpu.inst_ptr += inst.width.size;
             $else
                 error("Destination of MOV cannot be NUM");
             $endif
         case REG:
-            out = mem[cpu.inst_ptr:1];
+            out = mem[cpu.inst_ptr];
             cpu.inst_ptr += 1;
         case REGPTR:
-            out = cpu.registers[mem[cpu.inst_ptr]][..];
+            out = to_usize(W64, &cpu.registers[mem[cpu.inst_ptr]]);
             cpu.inst_ptr += 1;
         default:
             error("found %s", inst.#type);
@@ -326,38 +326,36 @@ macro void error(String format, ...)
     $endif
 }
 
-macro @to_size(BitWidth width, char[] src)
+fn USize to_usize(BitWidth src_width, char[] src)
 {
-    switch (width)
+    switch (src_width)
     {
         case W8:
             return src[0];
         case W16:
-            return *($evaltype(BitWidth.W16.type)*)(char*)char[]{src[1], src[0]};
+            return *(USize*)(char*)char[]{src[1], src[0]};
         case W32:
-            return *($evaltype(BitWidth.W32.type)*)(char*)char[]{src[3], src[2], src[1], src[0]};
+            return *(USize*)(char*)char[]{src[3], src[2], src[1], src[0]};
         case W64:
-            return *($evaltype(BitWidth.W64.type)*)(char*)char[]{src[7], src[6], src[5], src[4], src[3], src[2], src[1], src[0]};
+            return *(USize*)(char*)char[]{src[7], src[6], src[5], src[4], src[3], src[2], src[1], src[0]};
 
     }
 }
 
-macro char[] @to_bytes(data)
+fn char[] to_bytes(BitWidth dst_width, USize data)
 {
-    // Always ulong? @to_size why have you forsaken me?
+    // Always ulong? @to_usize why have you forsaken me?
     // io::printfn("to_bytes: %s %s", data, $typeof(data).nameof);
     char* src = (char*)&data;
-    switch ($sizeof(data))
+    switch (dst_width)
     {
-        case BitWidth.W8.size:
+        case W8:
             return {src[0]};
-        case BitWidth.W16.size:
+        case W16:
            return {src[1], src[0]};
-        case BitWidth.W32.size:
+        case W32:
            return {src[3], src[2], src[1], src[0]};
-        case BitWidth.W64.size:
+        case W64:
             return {src[7], src[6], src[5], src[4], src[3], src[2], src[1], src[0]};
-        default:
-            error("Not implemented");
     }//$endswitch
 }
