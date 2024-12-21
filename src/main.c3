@@ -18,11 +18,16 @@ struct Cpu
     // The address of the current instruction in memory
     USize inst_ptr;
     char[USize.sizeof][NUM_REGISTERS] registers;
+    bool f_zero;
+    // TODO: research what this actually does
+    bool f_carry;
 }
 
 def InstSize = ushort;
 
 // const PTR_SIZE = 6; // 6 bytes = 281474976710655 or 256TiB of addresable memory
+
+const OFFSET_SIZE = 6; // allows an address offset of 281474976710655. may be less with negatives
 
 bitstruct Instruction : InstSize
 {
@@ -34,13 +39,11 @@ bitstruct Instruction : InstSize
 //    Condition cond : 11..13;
     OffsetKind offset_kind : 11..12;
     
-    // bool real : 15;
+    bool real : 15;
 }
 
 enum InstructionType : char
 {
-    // Not a real instruction
-    ERR,
     // Do nothing
     NOP,
     // move PC memory address
@@ -112,11 +115,11 @@ Cpu cpu;
 fn int main(String[] args)
 {
 
-    Instruction test = {.type = CMP, .width = W8, .src_type = REGPTR, .dst_type = NUM, .offset_kind = NONE };
+    Instruction test = {.type = CMP, .width = W8, .src_type = REGPTR, .dst_type = NUM, .offset_kind = NONE, .real = true };
 
     io::printfn("test: %.4x 00b6: \u00b6", (InstSize)test); 
 
-    char[*] prog = x"04ea 00000000000000ff 01 058a 01 00 0008 04e6 0000000000000001 01 0002 000000000000000b 000c";
+    char[*] prog = x"84e9 00000000000000ff 01 8589 01 00 8007 84e5 0000000000000001 01 8001 000000000000000b 900b";
 
 //"09c7 00000000000000ff 01 0b07 01 00 0005 09c3 0000000000000001 01 0903 01 02 0501 000000000000000b 0009";
     mem[0:prog.len] = prog;
@@ -182,6 +185,14 @@ fn int main(String[] args)
             inst_buf.appendf("%.4x -> %s %s %s %s\n", (InstSize)curr_inst, curr_inst.type, curr_inst.width, curr_inst.dst_type, curr_inst.src_type);
         $endif
 
+        // Big brain error checking
+        if (!curr_inst.real)
+        {
+            io::eprintn("Invalid instruction");
+            running = false;
+            continue;
+        }
+
 
         // Point at the next byte
         cpu.inst_ptr += 2;
@@ -196,10 +207,6 @@ fn int main(String[] args)
         // Execute the current instruction
         switch (curr_inst.type)
         {
-            case ERR:
-                io::eprintn("Invalid instruction");
-                running = false;
-
             case MOV:
                 USize src = @read(curr_inst, src_type);
                 USize dst = @read(curr_inst, dst_type);
