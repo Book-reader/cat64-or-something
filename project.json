@@ -25,11 +25,23 @@
   // Architecture and OS target.
   // You can use 'c3c --list-targets' to list all valid targets.
   // "target": "windows-x64",
+  "features": [],
   // Targets.
   "targets": {
+    "none": {
+      "type": "executable"
+    },
     "emulator": {
       // Executable or library.
       "type": "executable",
+      "features": ["EMULATOR"],
+      // Additional libraries, sources
+      // and overrides of global settings here.
+    },
+    "assembler": {
+      // Executable or library.
+      "type": "executable",
+      "features": ["ASSEMBLER"],
       // Additional libraries, sources
       // and overrides of global settings here.
     },

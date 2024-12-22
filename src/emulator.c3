@@ -1,125 +1,33 @@
 module emulator;
+import common;
+
 import std::io;
 
 // TODO: remove
 import libc;
 
-// 16 Mib of memory
-const MEM_SIZE = 0x02000000_0;
-
-// 8 General registers
-const NUM_REGISTERS = 8;
-
-// 64 bit
-def USize = ulong;
-
 struct Cpu
 {
     // The address of the current instruction in memory
     USize inst_ptr;
-    char[USize.sizeof][NUM_REGISTERS] registers;
+    char[USize.sizeof][common::NUM_REGISTERS] registers;
     bool f_zero;
-    // TODO: research what this actually does
+    // if gt
     bool f_carry;
 }
 
-def InstSize = ushort;
-
-// const PTR_SIZE = 6; // 6 bytes = 281474976710655 or 256TiB of addresable memory
-
-const OFFSET_SIZE = 6; // allows an address offset of 281474976710655. may be less with negatives
-
-bitstruct Instruction : InstSize
-{
-    // There can be a max of 31 instructions, 32 including 0
-    InstructionType type : 0..4;
-    BitWidth width : 5..6;
-    OpType src_type : 7..8;
-    OpType dst_type : 9..10;
-//    Condition cond : 11..13;
-    OffsetKind offset_kind : 11..12;
-    
-    bool real : 15;
-}
-
-enum InstructionType : char
-{
-    // Do nothing
-    NOP,
-    // move PC memory address
-    JMP,
-    CMP,
-    JZ,
-    JNZ,
-    ADD,
-    SUB,
-    // Both of these will cease to exist once I create a stdout device
-    PRINTC,
-    PRINT,
-    //
-    MOV,
-    RET,
-    // Temp instruction that exits the emulator
-    EXIT,
-
-    AND,
-    NAND,
-    NOT,
-    OR,
-    XOR,
-    NOR,
-    XNOR,
-}
-
-enum BitWidth : char (char size)
-{
-    W8 = 1,
-    W16 = 2,
-    W32 = 4,
-    W64 = 8,
-}
-
-enum OpType : char
-{
-    PTR,
-    NUM,
-    REG,
-    REGPTR,
-}
-
-/*
-enum Condition : char
-{
-    NONE,
-    IFEQ,
-    IFNEQ,
-    IFGT,
-    IFGTEQ,
-    IFLT,
-    IFLTEQ,
-}*/
-
-enum OffsetKind : char
-{
-    NONE,
-    SRC,
-    DST,
-    BOTH
-}
-
-
-char[MEM_SIZE] mem;//_real; //@align(4);
+char[common::MEM_SIZE] mem;//_real; //@align(4);
 //char* mem = &mem_real;
 Cpu cpu;
 
-fn int main(String[] args)
+fn int main(String[] args) @if($feature(EMULATOR))
 {
 
-    Instruction test = {.type = CMP, .width = W8, .src_type = REGPTR, .dst_type = NUM, .offset_kind = NONE, .real = true };
+    Instruction test = {.real = true, .type = JIF, .jif_cond = NEQ }; // {.type = CMP, .width = W8, .src_type = REGPTR, .dst_type = NUM, .offset_kind = NONE, .real = true };
 
     io::printfn("test: %.4x 00b6: \u00b6", (InstSize)test); 
 
-    char[*] prog = x"84e9 00000000000000ff 01 8589 01 00 8007 84e5 0000000000000001 01 8382 00 00 8004 000000000000000b 900b";
+    char[*] prog = x"84e8 00000000000000ff 01 8588 01 00 8006 84e4 0000000000000001 01 8382 00 00 8083 000000000000000b 900a";
 
     mem[0:prog.len] = prog;
 
@@ -129,7 +37,7 @@ fn int main(String[] args)
     }
     else
     {
-        mem[0xff:14] = "hello, world!\n\0";
+        mem[0xff:14] = "Hello, World!\n\0";
     }
 
 
@@ -179,13 +87,6 @@ fn int main(String[] args)
         // Point at the next byte
         cpu.inst_ptr += 2;
 
-        //@to_bytes(@to_usize(curr_inst.width, x"112233445566778899"));
-        /*if (cond is false)
-        {
-            continue;
-        }
-        */
-
         // Execute the current instruction
         switch (curr_inst.type)
         {
@@ -221,12 +122,9 @@ fn int main(String[] args)
                 $else
                     io::printf("%c", to_usize(W64, &cpu.registers[0]));
                 $endif
-                // if (to_usize(W64, &cpu.registers[0]) == 0)
-                // {io::printn("exiting hackishly (tried to print 0)\n"); running=false;}
             case PRINT:
                 io::printf("%s", (ZString)mem[to_usize(W64, &cpu.registers[0])..]);
             case ADD:
-                // io::printfn("%s", curr_inst.width);
                 USize src = @read(curr_inst, src_type);
                 USize dst = @read(curr_inst, dst_type);
 
@@ -247,12 +145,21 @@ fn int main(String[] args)
             case CMP:
                 USize src = @read(curr_inst, src_type);
                 USize dst = @read(curr_inst, dst_type);
-// io::printfn("comparing %s and %s: %s", src, dst, src == dst);
-                cpu.f_zero = src == dst;
-                // TODO: set cpu.f_carry
 
-            case JZ:
-                if (cpu.f_zero)
+                cpu.f_zero = src == dst;
+                cpu.f_carry = src > dst;
+
+            case JIF:
+                bool jmp = false;
+               
+                switch (curr_inst.jif_cond)
+                {
+                    case NEQ:
+                        jmp = !cpu.f_zero;
+                    default:
+                        error("Condition %s not implemented", curr_inst.jif_cond);
+                }
+                if (jmp)
                 {
                     cpu.inst_ptr = to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
                 }
@@ -260,15 +167,7 @@ fn int main(String[] args)
                 {
                     cpu.inst_ptr += USize.sizeof;
                 }
-            case JNZ:
-                if (!cpu.f_zero)
-                {
-                    cpu.inst_ptr = to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
-                }
-                else
-                {
-                    cpu.inst_ptr += USize.sizeof;
-                }
+
             case EXIT:
                 running = false;
             case NOP:
