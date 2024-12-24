@@ -244,69 +244,61 @@ fn List(<char>)! build_arguments(InstT_And_Width inst_type, List(<Tokens>) args)
 {
   List(<char>) args_ch;
 
-  assert (args.len() <= 2);
-  for (int i = (int)args.len() - 1; i >= 0; i--)
+  if (inst_type.first == JIF)
   {
-    io::printfn("%s %s", i, args.len());
-    Tokens arg = args[i];
-    foreach (tok : arg)
+    args_ch.add_array(common::to_bytes(W64, args[0][0].lexme.to_ulong()!));
+  }
+  else
+  {
+    assert (args.len() <= 2);
+    for (int i = (int)args.len() - 1; i >= 0; i--)
     {
-      switch (tok.type)
+      io::printfn("%s %s", i, args.len());
+      Tokens arg = args[i];
+      foreach (tok : arg)
       {
-        case REGISTER:
-          args_ch.add_array(common::to_bytes(W8, lexer::REG_NAMES[..].index_of(tok.lexme)!!));
-        case NUMBER:
-          char[] result;
-          switch (inst_type.second)
-          {
-            case W8:
-              result = common::to_bytes(inst_type.second, tok.lexme.to_uchar()!, true);
-            case W16:
-              result = common::to_bytes(inst_type.second, tok.lexme.to_ushort()!, true);
-            case W32:
-              result = common::to_bytes(inst_type.second, tok.lexme.to_uint()!, true);
-            case W64:
-              result = common::to_bytes(inst_type.second, tok.lexme.to_ulong()!, true);
-              for (int j = 0; j < inst_type.second.size; j++)
-              {
-                io::printf("%.2x", result[j]);
-              }
-              io::printn();
-              io::printfn("W64: %.16x %.16x", common::to_usize(W64, result), tok.lexme.to_uchar()!);
-          }
-          args_ch.add_array(result);
-          //for ()
-          io::printfn("%s: %s", inst_type.second, common::to_usize(inst_type.second, args_ch.array_view()[args_ch.len() - inst_type.second.size..]));
-//          io::printfn();
-        case CHAR:
-           io::printfn("found char %c:%.2x", tok.lexme[0], tok.lexme[0]);
-           args_ch.push(tok.lexme[0]);
-           io::printfn("char2 %c %.2x", args_ch[args_ch.len()-1], args_ch[args_ch.len()-1]);
-        case DEREF:
-          break;
-        default:
-          common::error("Unhandled token type: %s (%s)", tok.type, tok.lexme);
+        switch (tok.type)
+        {
+          case REGISTER:
+            args_ch.add_array(common::to_bytes(W8, lexer::REG_NAMES[..].index_of(tok.lexme)!!));
+          case NUMBER:
+            char[] result;
+            switch (inst_type.second)
+            {
+              case W8:
+                result = common::to_bytes(inst_type.second, tok.lexme.to_uchar()!, true);
+              case W16:
+                result = common::to_bytes(inst_type.second, tok.lexme.to_ushort()!, true);
+              case W32:
+                result = common::to_bytes(inst_type.second, tok.lexme.to_uint()!, true);
+              case W64:
+                result = common::to_bytes(inst_type.second, tok.lexme.to_ulong()!, true);
+                for (int j = 0; j < inst_type.second.size; j++)
+                {
+                  io::printf("%.2x", result[j]);
+                }
+                io::printn();
+                io::printfn("W64: %.16x %.16x", common::to_usize(W64, result), tok.lexme.to_uchar()!);
+            }
+            args_ch.add_array(result);
+            //for ()
+            io::printfn("%s: %s", inst_type.second, common::to_usize(inst_type.second, args_ch.array_view()[args_ch.len() - inst_type.second.size..]));
+//            io::printfn();
+          case CHAR:
+             io::printfn("found char %c:%.2x", tok.lexme[0], tok.lexme[0]);
+             args_ch.push(tok.lexme[0]);
+             io::printfn("char2 %c %.2x", args_ch[args_ch.len()-1], args_ch[args_ch.len()-1]);
+          case DEREF:
+            break;
+          default:
+            common::error("Unhandled token type: %s (%s)", tok.type, tok.lexme);
+        }
       }
     }
   }
 
   return args_ch;
 }
-
-/*bitstruct Instruction : InstSize @overlap
-{
-    // There can be a max of 31 instructions, 32 including 0
-    InstructionType type : 0..4;
-    BitWidth width : 5..6;
-    // 
-    Condition jif_cond : 7..8;
-    OpType src_type : 7..8;
-    OpType dst_type : 9..10;
-//    Condition cond : 11..13;
-    OffsetKind offset_kind : 11..12;
-    
-    bool real : 15;
-}*/
 
 fn List(<char>)! validate_sequence(Tokens sequence)
 {
