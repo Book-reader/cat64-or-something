@@ -49,16 +49,41 @@ fn int main(String[] args) @if($feature(ASSEMBLER))
   return 0;
 }
 
-fn List(<char>) validate_gen(Tokens lexed)
+fn List(<char>) validate_gen(Tokens lexed) // TODO: FIX
 {
   List(<char>) generated;
 
   Tokens sequence; 
 
-  foreach (token : lexed)
+  for (usz i = 0; i < lexed.len(); )
   {
-    io::printfn("val: %s", token);
-    if (token.type == LABEL || token.type == LABEL_DECL)
+    io::printfn("val: %s", lexed[i]);
+    if (lexed[i].type == INSTRUCTION)
+    {
+      sequence.push(lexed[i]);
+      i++;
+      while (i < lexed.len() && lexed[i].type != INSTRUCTION)
+      {
+        if (lexed[i].type == LABEL || lexed[i].type == LABEL_DECL)
+        {
+          common::error("Labels are not implemented yet");
+        }
+        sequence.push(lexed[i]);
+        i++;
+      }
+      List(<char>)! new = validate_sequence(sequence);
+      if (catch err = new)
+      {
+        common::error("Error while parsing tokens '%s': %s", sequence.array_view(), err);
+      }
+      generated.add_all(&new);
+      sequence.clear();
+    }
+    else
+    {
+      common::error("I probably did something stupid");
+    }
+    /*if (token.type == LABEL || token.type == LABEL_DECL)
     {
       common::error("Labels are not implemented yet");
     }
@@ -76,7 +101,7 @@ fn List(<char>) validate_gen(Tokens lexed)
       generated.add_all(&new);
       sequence.clear();
       sequence.push(token);
-    }
+    }*/
   }
 
   return generated;
@@ -263,6 +288,7 @@ fn List(<char>)! build_arguments(InstT_And_Width inst_type, List(<Tokens>) args)
             args_ch.add_array(common::to_bytes(W8, lexer::REG_NAMES[..].index_of(tok.lexme)!!));
           case NUMBER:
             char[] result;
+            io::printfn("%s", inst_type.second);
             switch (inst_type.second)
             {
               case W8:
@@ -273,12 +299,6 @@ fn List(<char>)! build_arguments(InstT_And_Width inst_type, List(<Tokens>) args)
                 result = common::to_bytes(inst_type.second, tok.lexme.to_uint()!, true);
               case W64:
                 result = common::to_bytes(inst_type.second, tok.lexme.to_ulong()!, true);
-                for (int j = 0; j < inst_type.second.size; j++)
-                {
-                  io::printf("%.2x", result[j]);
-                }
-                io::printn();
-                io::printfn("W64: %.16x %.16x", common::to_usize(W64, result), tok.lexme.to_uchar()!);
             }
             args_ch.add_array(result);
             //for ()
