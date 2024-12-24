@@ -30,32 +30,32 @@ bitstruct Instruction : InstSize @overlap
     bool real : 15;
 }
 
-enum InstructionType : char
+enum InstructionType : char (String name, bool sized, usz args_len)
 {
     // Do nothing
-    NOP,
+    NOP = { "nop", false, 0 },
     // move PC memory address
-    JMP,
-    CMP,
-    JIF,
-    ADD,
-    SUB,
+    JMP = { "jmp", false, 1 },
+    CMP = { "cmp", true, 2 },
+    JIF = { "jif", false, 1 },
+    ADD = { "add", true, 2 },
+    SUB = { "sub", true, 2 },
     // Both of these will cease to exist once I create a stdout device
-    PRINTC,
-    PRINT,
+    PRINTC = { "printc", true, 1 },
+    PRINT = { "print", false, 1 },
     //
-    MOV,
-    RET,
+    MOV = { "mov", true, 2 },
+    RET = { "ret", false, 0 }, // this might be a pseudo instruction
     // Temp instruction that exits the emulator
-    EXIT,
+    EXIT = { "exit", false, 0 },
 
-    AND,
-    NAND,
-    NOT,
-    OR,
-    XOR,
-    NOR,
-    XNOR,
+    AND = { "and", true, 2 },
+    NAND = { "and", true, 2 },
+    NOT = { "not", true, 2 },
+    OR = { "or", true, 2 },
+    XOR = { "xor", true, 2 },
+    NOR = { "nor", true, 2 },
+    XNOR = { "xnor", true, 2 },
 }
 
 enum BitWidth : char (char size)
@@ -93,4 +93,46 @@ enum OffsetKind : char
     BOTH
 }
 
+fn USize to_usize(BitWidth src_width, char[] src)
+{
+    switch (src_width)
+    {
+        case W8:
+            return src[0];
+        case W16:
+            return *(USize*)(char*)char[]{src[1], src[0], 0, 0, 0, 0, 0, 0};
+        case W32:
+            return *(USize*)(char*)char[]{src[3], src[2], src[1], src[0], 0, 0, 0, 0};
+        case W64:
+            return *(USize*)(char*)char[]{src[7], src[6], src[5], src[4], src[3], src[2], src[1], src[0]};
 
+    }
+}
+
+fn char[] to_bytes(BitWidth dst_width, USize data)
+{
+    char* src = (char*)&data;
+    switch (dst_width)
+    {
+        case W8:
+            return {src[0]};
+        case W16:
+           return {src[1], src[0]};
+        case W32:
+           return {src[3], src[2], src[1], src[0]};
+        case W64:
+            return {src[7], src[6], src[5], src[4], src[3], src[2], src[1], src[0]};
+    }
+}
+
+macro void error(String format, ...)
+{
+    $if (env::COMPILER_SAFE_MODE):
+        unreachable(format, $vasplat);
+    $else
+        io::eprintf("ERROR: %s:%s ", $$FILE, $$LINE);
+        io::eprintfn(format, $vasplat);
+        libc::exit(1);
+        unreachable();
+    $endif
+}

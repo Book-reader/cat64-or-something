@@ -27,13 +27,23 @@ fn int main(String[] args) @if($feature(EMULATOR))
 
     io::printfn("test: %.4x 00b6: \u00b6", (InstSize)test); 
 
-    char[*] prog = x"84e8 00000000000000ff 01 8588 01 00 8006 84e4 0000000000000001 01 8382 00 00 8083 000000000000000b 900a";
-
-    mem[0:prog.len] = prog;
+    char[] prog;
 
     if (args.len > 1)
     {
-        mem[0xff:args[1].len] = args[1];
+        prog = file::load_new(args[1])!!;
+    }
+    else
+    {
+        prog = x"84e8 00000000000000ff 01 8588 01 00 8006 84e4 0000000000000001 01 8382 00 00 8083 000000000000000b 900a";
+    }
+
+
+    mem[0:prog.len] = prog;
+
+    if (args.len > 2)
+    {
+        mem[0xff:args[2].len] = args[2];
     }
     else
     {
@@ -57,7 +67,7 @@ fn int main(String[] args) @if($feature(EMULATOR))
     io::printn("Output: ");
 
 
-    // io::printfn("%.4x %.4x %.4x", @to_usize(W16, prog[0:2]), @to_usize2(W16, prog[0:2]), @to_usize3(W16, prog[0:2]));
+    // io::printfn("%.4x %.4x %.4x", @common::to_usize(W16, prog[0:2]), @common::to_usize2(W16, prog[0:2]), @common::to_usize3(W16, prog[0:2]));
 
     while (running)
     {
@@ -75,7 +85,7 @@ fn int main(String[] args) @if($feature(EMULATOR))
             inst_buf.appendf("%.4x -> %s %s %s %s\n", (InstSize)curr_inst, curr_inst.type, curr_inst.width, curr_inst.dst_type, curr_inst.src_type);
         $endif
 
-        // Big brain error checking
+        // Big brain common::error checking
         if (!curr_inst.real)
         {
             io::eprintn("Invalid instruction");
@@ -100,30 +110,30 @@ fn int main(String[] args) @if($feature(EMULATOR))
                         switch (curr_inst.src_type)
                         {
                             case NUM:
-                                // io::printfn("setting register %d containing %x to %x", dst[0], @to_usize(W64, &cpu.registers[dst[0]]), @to_usize(curr_inst.width, src[0:curr_inst.width.size]));
-                                cpu.registers[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = to_bytes(curr_inst.width, src)[0:curr_inst.width.size];
+                                // io::printfn("setting register %d containing %x to %x", dst[0], @common::to_usize(W64, &cpu.registers[dst[0]]), @common::to_usize(curr_inst.width, src[0:curr_inst.width.size]));
+                                cpu.registers[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = common::to_bytes(curr_inst.width, src)[0:curr_inst.width.size];
                             case REG:
                                 cpu.registers[dst] = cpu.registers[src];
                             case REGPTR:
                                 cpu.registers[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = mem[src:curr_inst.width.size];
                             default:
-                                error("found %s", curr_inst.src_type);
+                                common::error("found %s", curr_inst.src_type);
                         }
                     case NUM:
-                        error("Destination of MOV cannot be NUM");
+                        common::error("Destination of MOV cannot be NUM");
                     default:
-                        error("found %s", curr_inst.dst_type);
+                        common::error("found %s", curr_inst.dst_type);
                 }
             case JMP:
-                cpu.inst_ptr = to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
+                cpu.inst_ptr = common::to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
             case PRINTC:
                 $if ($feature(DEBUG)):
-                    inst_buf.appendf("%c", to_usize(W64, &cpu.registers[0]));
+                    inst_buf.appendf("%c", common::to_usize(W64, &cpu.registers[0]));
                 $else
-                    io::printf("%c", to_usize(W64, &cpu.registers[0]));
+                    io::printf("%c", common::to_usize(W64, &cpu.registers[0]));
                 $endif
             case PRINT:
-                io::printf("%s", (ZString)mem[to_usize(W64, &cpu.registers[0])..]);
+                io::printf("%s", (ZString)mem[common::to_usize(W64, &cpu.registers[0])..]);
             case ADD:
                 USize src = @read(curr_inst, src_type);
                 USize dst = @read(curr_inst, dst_type);
@@ -135,12 +145,12 @@ fn int main(String[] args) @if($feature(EMULATOR))
                         {
                             case NUM:
                                 //cpu.registers[]
-                               cpu.registers[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = to_bytes(curr_inst.width, to_usize(curr_inst.width, &cpu.registers[dst]) + src)[0:curr_inst.width.size];
+                               cpu.registers[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = common::to_bytes(curr_inst.width, common::to_usize(curr_inst.width, &cpu.registers[dst]) + src)[0:curr_inst.width.size];
                             default:
-                               error("found %s", curr_inst.dst_type);
+                               common::error("found %s", curr_inst.dst_type);
                         }
                     default:
-                        error("found %s", curr_inst.dst_type);
+                        common::error("found %s", curr_inst.dst_type);
                 }
             case CMP:
                 USize src = @read(curr_inst, src_type);
@@ -157,11 +167,11 @@ fn int main(String[] args) @if($feature(EMULATOR))
                     case NEQ:
                         jmp = !cpu.f_zero;
                     default:
-                        error("Condition %s not implemented", curr_inst.jif_cond);
+                        common::error("Condition %s not implemented", curr_inst.jif_cond);
                 }
                 if (jmp)
                 {
-                    cpu.inst_ptr = to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
+                    cpu.inst_ptr = common::to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
                 }
                 else
                 {
@@ -173,7 +183,7 @@ fn int main(String[] args) @if($feature(EMULATOR))
             case NOP:
                 break;
             default:
-                error("Instruction %s not implemented yet", curr_inst.type);
+                common::error("Instruction %s not implemented yet", curr_inst.type);
         }
     }
 
@@ -189,60 +199,17 @@ macro USize @read(Instruction* &inst, #type)
     switch (inst.#type)
     {
         case NUM:
-                out = to_usize(inst.width, mem[cpu.inst_ptr:inst.width.size]);
+                out = common::to_usize(inst.width, mem[cpu.inst_ptr:inst.width.size]);
                 cpu.inst_ptr += inst.width.size;
         case REG:
             out = mem[cpu.inst_ptr];
             cpu.inst_ptr += 1;
         case REGPTR:
-            out = to_usize(W64, &cpu.registers[mem[cpu.inst_ptr]]);
+            out = common::to_usize(W64, &cpu.registers[mem[cpu.inst_ptr]]);
             cpu.inst_ptr += 1;
         default:
-            error("found %s", inst.#type);
+            common::error("found %s", inst.#type);
     }
     return out;
 }
 
-macro void error(String format, ...)
-{
-    $if (env::COMPILER_SAFE_MODE):
-        unreachable(format, $vasplat);
-    $else
-        io::eprintf("ERROR: %s:%s ", $$FILE, $$LINE);
-        io::eprintfn(format, $vasplat);
-        libc::exit(1);
-        unreachable();
-    $endif
-}
-
-fn USize to_usize(BitWidth src_width, char[] src)
-{
-    switch (src_width)
-    {
-        case W8:
-            return src[0];
-        case W16:
-            return *(USize*)(char*)char[]{src[1], src[0], 0, 0, 0, 0, 0, 0};
-        case W32:
-            return *(USize*)(char*)char[]{src[3], src[2], src[1], src[0], 0, 0, 0, 0};
-        case W64:
-            return *(USize*)(char*)char[]{src[7], src[6], src[5], src[4], src[3], src[2], src[1], src[0]};
-
-    }
-}
-
-fn char[] to_bytes(BitWidth dst_width, USize data)
-{
-    char* src = (char*)&data;
-    switch (dst_width)
-    {
-        case W8:
-            return {src[0]};
-        case W16:
-           return {src[1], src[0]};
-        case W32:
-           return {src[3], src[2], src[1], src[0]};
-        case W64:
-            return {src[7], src[6], src[5], src[4], src[3], src[2], src[1], src[0]};
-    }
-}
