@@ -10,7 +10,5 @@ cmp.8, [r0], 0
 
 jif 01, 0xb
 
-jmp 0
-
 exit
 
