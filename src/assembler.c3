@@ -244,8 +244,11 @@ fn List(<char>)! build_arguments(InstT_And_Width inst_type, List(<Tokens>) args)
 {
   List(<char>) args_ch;
 
-  foreach (arg : args)
+  assert (args.len() <= 2);
+  for (int i = (int)args.len() - 1; i >= 0; i--)
   {
+    io::printfn("%s %s", i, args.len());
+    Tokens arg = args[i];
     foreach (tok : arg)
     {
       switch (tok.type)
@@ -257,15 +260,24 @@ fn List(<char>)! build_arguments(InstT_And_Width inst_type, List(<Tokens>) args)
           switch (inst_type.second)
           {
             case W8:
-              result = common::to_bytes(inst_type.second, tok.lexme.to_uchar()!);
+              result = common::to_bytes(inst_type.second, tok.lexme.to_uchar()!, true);
             case W16:
-              result = common::to_bytes(inst_type.second, tok.lexme.to_ushort()!);
+              result = common::to_bytes(inst_type.second, tok.lexme.to_ushort()!, true);
             case W32:
-              result = common::to_bytes(inst_type.second, tok.lexme.to_uint()!);
+              result = common::to_bytes(inst_type.second, tok.lexme.to_uint()!, true);
             case W64:
-              result = common::to_bytes(inst_type.second, tok.lexme.to_ulong()!);
+              result = common::to_bytes(inst_type.second, tok.lexme.to_ulong()!, true);
+              for (int j = 0; j < inst_type.second.size; j++)
+              {
+                io::printf("%.2x", result[j]);
+              }
+              io::printn();
+              io::printfn("W64: %.16x %.16x", common::to_usize(W64, result), tok.lexme.to_uchar()!);
           }
           args_ch.add_array(result);
+          //for ()
+          io::printfn("%s: %s", inst_type.second, common::to_usize(inst_type.second, args_ch.array_view()[args_ch.len() - inst_type.second.size..]));
+//          io::printfn();
         case CHAR:
            io::printfn("found char %c:%.2x", tok.lexme[0], tok.lexme[0]);
            args_ch.push(tok.lexme[0]);

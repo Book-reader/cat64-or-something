@@ -112,20 +112,27 @@ fn USize to_usize(BitWidth src_width, char[] src)
     }
 }
 
-fn char[] to_bytes(BitWidth dst_width, USize data)
+macro char[] to_bytes(BitWidth dst_width, USize data, bool $alloc = false)
 {
     char* src = (char*)&data;
+    
+    $if $alloc:
+      char[] dst = mem::alloc_array(char, dst_width.size);
+    $else
+      char[] dst;
+    $endif
     switch (dst_width)
     {
         case W8:
-            return {src[0]};
+            dst = char[]{src[0]};
         case W16:
-           return {src[1], src[0]};
+            dst = char[]{src[1], src[0]};
         case W32:
-           return {src[3], src[2], src[1], src[0]};
+            dst = char[]{src[3], src[2], src[1], src[0]};
         case W64:
-            return {src[7], src[6], src[5], src[4], src[3], src[2], src[1], src[0]};
+            dst = char[]{src[7], src[6], src[5], src[4], src[3], src[2], src[1], src[0]};
     }
+    return dst;
 }
 
 macro void error(String format, ...)
