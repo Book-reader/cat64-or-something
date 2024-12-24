@@ -34,6 +34,7 @@ fn int main(String[] args) @if($feature(EMULATOR))
     {
         prog = x"84e8 00000000000000ff 01 8588 01 00 8006 84e4 0000000000000001 01 8382 00 00 8083 000000000000000b 900a";
     }
+    defer if (args.len > 1) free(prog);
 
 
     mem[0:prog.len] = prog;
