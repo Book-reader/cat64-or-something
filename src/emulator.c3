@@ -3,9 +3,6 @@ import common;
 
 import std::io;
 
-// TODO: remove
-import libc;
-
 struct Cpu
 {
     // The address of the current instruction in memory

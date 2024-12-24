@@ -1,5 +1,8 @@
 module common;
 
+import std::io;
+import std::thread;
+
 // 16 Mib of memory
 const MEM_SIZE = 0x02000000_0;
 
@@ -37,11 +40,11 @@ enum InstructionType : char (String name, bool sized, usz args_len)
     // move PC memory address
     JMP = { "jmp", false, 1 },
     CMP = { "cmp", true, 2 },
-    JIF = { "jif", false, 1 },
+    JIF = { "jif", false, 2 }, // Only takes 1 agument in the vm, as the first argument is embedded in the instruction
     ADD = { "add", true, 2 },
     SUB = { "sub", true, 2 },
     // Both of these will cease to exist once I create a stdout device
-    PRINTC = { "printc", true, 1 },
+    PRINTC = { "printc", true, 0 },
     PRINT = { "print", false, 1 },
     //
     MOV = { "mov", true, 2 },
@@ -58,12 +61,12 @@ enum InstructionType : char (String name, bool sized, usz args_len)
     XNOR = { "xnor", true, 2 },
 }
 
-enum BitWidth : char (char size)
+enum BitWidth : char (char size, char bit_size)
 {
-    W8 = 1,
-    W16 = 2,
-    W32 = 4,
-    W64 = 8,
+    W8 = { 1, 8 },
+    W16 = { 2, 16 },
+    W32 = { 4, 32 },
+    W64 = { 8, 64 },
 }
 
 enum OpType : char
@@ -132,7 +135,7 @@ macro void error(String format, ...)
     $else
         io::eprintf("ERROR: %s:%s ", $$FILE, $$LINE);
         io::eprintfn(format, $vasplat);
-        libc::exit(1);
+        thread::exit(1);
         unreachable();
     $endif
 }
