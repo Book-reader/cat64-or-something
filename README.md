@@ -1,6 +1,6 @@
 # Cat64 or something
 
-## Inspired by (Fox32)[https://github.com/fox32-arch]
+## Inspired by [Fox32](https://github.com/fox32-arch)
 
 usage:
 ```
