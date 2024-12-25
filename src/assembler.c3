@@ -82,9 +82,14 @@ fn void validate_gen(List(<char>)* generated, Tokens lexed) // TODO: FIX
       }
       sequence.clear();
     }
+    else if (lexed[i].type == LABEL_DECL)
+    {
+      lexer::labels.set(lexed[i].lexme[..lexed[i].lexme.len - 2], generated.len() + 1);
+      i++;
+    }
     else
     {
-      common::error("I probably did something stupid");
+      common::error("I probably did something stupid %s", lexed[i].type);
     }
     /*if (token.type == LABEL || token.type == LABEL_DECL)
     {
@@ -240,10 +245,12 @@ fn Instruction! build_instruction(InstT_And_Width type, List(<Tokens>) args)
       switch (arg[1].type)
       {
         case NUMBER:
-        case LABEL:
           op_type = PTR;
         case REGISTER:
           op_type = REGPTR;
+        case LABEL:
+          op_type = PTR;
+          inst.jif_rel = true;
         default:
           common::error("Unsupported deref: %s", arg[1].type);
       }
@@ -254,10 +261,13 @@ fn Instruction! build_instruction(InstT_And_Width type, List(<Tokens>) args)
       {
         case NUMBER:
         case CHAR:
-        case LABEL:
           op_type = NUM;
         case REGISTER:
           op_type = REG;
+        case LABEL:
+          op_type = NUM;
+          inst.jif_rel = true;
+
         default:
           common::error("Unsupported type: %s", arg[0].type);
       }
@@ -362,9 +372,9 @@ io::printn();
           case DEREF:
             break;
           case LABEL:
-            io::printfn("label offset is %.16x", (isz)lexer::labels.get(tok.lexme)! - (isz)args_ch.len());
+            io::printfn("label offset is %.16x", (isz)lexer::labels.get(args[0][0].lexme)!! - args_ch.len());
             io::printfn("weufhewiufewiufhewhewiufhewifuwehfiuewhfiewhf REMEMBER TO MAKE RELATIVE (isz)lexer::labels.get(tok.lexme)! - args_ch.len()");
-            args_ch.add_array(common::to_bytes(inst_type.second, (isz)lexer::labels.get(tok.lexme)!, true));
+            args_ch.add_array(common::to_bytes(inst_type.second, (isz)lexer::labels.get(args[0][0].lexme)!! - args_ch.len(), true));
           case LABEL_DECL:
             lexer::labels.set(tok.lexme[..tok.lexme.len - 2], args_ch.len() + 1);
           default:

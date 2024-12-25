@@ -123,7 +123,14 @@ fn int main(String[] args) @if($feature(EMULATOR))
                         common::error("found %s", curr_inst.dst_type);
                 }
             case JMP:
-                cpu.inst_ptr = common::to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
+                if (!curr_inst.jif_rel)
+                {
+                    cpu.inst_ptr = common::to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
+                }
+                else
+                {
+                    cpu.inst_ptr += (isz)common::to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
+                }
             case PRINTC:
                 $if ($feature(DEBUG)):
                     inst_buf.appendf("%c", common::to_usize(W64, &cpu.registers[0]));
