@@ -289,7 +289,7 @@ fn Instruction! build_instruction(InstT_And_Width type, List(<Tokens>) args)
     {
       return ValidationError.INVALID_JIF_COND?;
     }
-    inst.jif_cond = (Condition)cond;
+    inst.jif_cond = Condition.from_ordinal(cond);
     args.remove_first();
     if (lexer::labels.has_key(args[0][0].lexme))
     {
