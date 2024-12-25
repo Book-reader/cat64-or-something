@@ -29,6 +29,7 @@ bitstruct Instruction : InstSize @overlap
     OpType dst_type : 9..10;
 //    Condition cond : 11..13;
     OffsetKind offset_kind : 11..12;
+    bool jif_rel : 13;
     
     bool real : 15;
 }

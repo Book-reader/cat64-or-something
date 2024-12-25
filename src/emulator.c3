@@ -20,7 +20,7 @@ Cpu cpu;
 fn int main(String[] args) @if($feature(EMULATOR))
 {
 
-    Instruction test = {.real = true, .type = JIF, .jif_cond = NEQ }; // {.type = CMP, .width = W8, .src_type = REGPTR, .dst_type = NUM, .offset_kind = NONE, .real = true };
+    Instruction test = {.real = true, .type = JIF, .jif_cond = NEQ, .jif_rel=true }; // {.type = CMP, .width = W8, .src_type = REGPTR, .dst_type = NUM, .offset_kind = NONE, .real = true };
 
     io::printfn("test: %.4x 00b6: \u00b6", (InstSize)test); 
 
@@ -86,7 +86,7 @@ fn int main(String[] args) @if($feature(EMULATOR))
         // Big brain common::error checking
         if (!curr_inst.real)
         {
-            io::eprintn("Invalid instruction");
+            io::eprintfn("Invalid instruction: %.4x", (InstSize)curr_inst);
             running = false;
             continue;
         }
@@ -169,7 +169,15 @@ fn int main(String[] args) @if($feature(EMULATOR))
                 }
                 if (jmp)
                 {
-                    cpu.inst_ptr = common::to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
+                    if (curr_inst.jif_rel)
+                    {
+                        io::printfn("jumping relativly from %s by %s", cpu.inst_ptr, (isz)common::to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]));
+                        cpu.inst_ptr += (isz)common::to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
+                    }
+                    else
+                    {
+                        cpu.inst_ptr = common::to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
+                    }
                 }
                 else
                 {

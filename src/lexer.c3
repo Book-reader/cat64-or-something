@@ -4,6 +4,7 @@ import common;
 
 import std::io;
 import std::collections::list;
+import std::collections::map;
 
 def Tokens = List(<Token>);
 
@@ -41,6 +42,8 @@ fault InstructionFault
   NO_SIZE_IN_SIZED_INSTRUCTION,
   INCORRECT_SIZE_PREFIX,
 }
+
+HashMap(<String, usz>) labels;
 
 fn bool! check_valid_instruction(String data)
 {
@@ -212,6 +215,7 @@ fn Tokens! lex(char[] to_lex)
       else if (is_valid_label_decl(curr_tok.str_view()))
       {
         t = LABEL_DECL;
+        labels.set(curr_tok.copy_str()[..curr_tok.len() - 2], -1);
       }
       else if (is_valid_label(curr_tok.str_view()))
       {
@@ -225,7 +229,7 @@ fn Tokens! lex(char[] to_lex)
       curr_tok.clear();
       if (ch == ARG_SEP)
       {
-        lexed.push({ String{ ch }.copy(), ARG_SEP});
+        lexed.push({ String{ ch }.copy(), ARG_SEP });
       }
       continue;
     }
