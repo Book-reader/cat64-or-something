@@ -1,3 +1,4 @@
+start:
 mov.64 r1, 0xff
 
 loop:
@@ -6,6 +7,8 @@ loop:
   add.64, r1, 1
   cmp.8, [r0], 0
   jif 01, loop
+
+jmp start
 
 exit
 

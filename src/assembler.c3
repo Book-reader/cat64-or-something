@@ -374,7 +374,7 @@ io::printn();
           case LABEL:
             io::printfn("label offset is %.16x", (isz)lexer::labels.get(args[0][0].lexme)!! - args_ch.len());
             io::printfn("weufhewiufewiufhewhewiufhewifuwehfiuewhfiewhf REMEMBER TO MAKE RELATIVE (isz)lexer::labels.get(tok.lexme)! - args_ch.len()");
-            args_ch.add_array(common::to_bytes(inst_type.second, (isz)lexer::labels.get(args[0][0].lexme)!! - args_ch.len(), true));
+            args_ch.add_array(common::to_bytes(W64, (isz)lexer::labels.get(args[0][0].lexme)!! - args_ch.len(), true));
           case LABEL_DECL:
             lexer::labels.set(tok.lexme[..tok.lexme.len - 2], args_ch.len() + 1);
           default:
