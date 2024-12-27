@@ -30,17 +30,6 @@ fn usz! InstTok.to_format(&self, Formatter* formatter) @dynamic
           break OUTER;
         }
       $endforeach
-    /*switch (self.$eval($arg +++ "_type"))
-    {
-      case W8:
-        n += formatter.printf("%s),", self.$eval($arg).as_8);
-      case W16:
-        n += formatter.printf("%s),", self.$eval($arg).as_16);
-      case W32:
-        n += formatter.printf("%s),", self.$eval($arg).as_32);
-      case W64:
-        n += formatter.printf("%s),", self.$eval($arg).as_64);
-    }*/
     }
   $endforeach
   n += formatter.print("]");
@@ -97,7 +86,6 @@ fn int main(String[] args) @if($feature(ASSEMBLER))
   out_file.close()!!;
 
 
-  io::printfn("%s", InstTok{JIF, W8, W64, {.as_W8 = 01}, {.as_W64 = 0xb}});
   return 0;
 }
 
@@ -115,11 +103,6 @@ fn void validate_gen(List(<char>)* generated, Tokens lexed) // TODO: FIX
       i++;
       while (i < lexed.len() && lexed[i].type != INSTRUCTION)
       {
-/*        if (lexed[i].type == LABEL)
-        {
-         
- //         common::error("Labels are not implemented yet");
-        }*/
         sequence.push(lexed[i]);
         i++;
       }
@@ -138,25 +121,6 @@ fn void validate_gen(List(<char>)* generated, Tokens lexed) // TODO: FIX
     {
       common::error("I probably did something stupid %s", lexed[i].type);
     }
-    /*if (token.type == LABEL || token.type == LABEL_DECL)
-    {
-      common::error("Labels are not implemented yet");
-    }
-    if (sequence.len() == 0 || ( token.type != INSTRUCTION && token.type != LABEL_DECL))
-    {
-      sequence.push(token);
-    }
-    else
-    {
-      List(<char>)! new = validate_sequence(sequence);
-      if (catch err = new)
-      {
-        common::error("Error while parsing tokens '%s': %s", sequence.array_view(), err);
-      }
-      generated.add_all(&new);
-      sequence.clear();
-      sequence.push(token);
-    }*/
   }
 }
 
