@@ -34,7 +34,7 @@ bitstruct Instruction : InstSize @overlap
     bool real : 15;
 }
 
-enum InstructionType : char (String name, bool sized, usz args_len)
+enum InstructionType : char (String name, bool sized, bool args_len)
 {
     // Do nothing
     NOP = { "nop", false, 0 },
@@ -62,7 +62,7 @@ enum InstructionType : char (String name, bool sized, usz args_len)
     XNOR = { "xnor", true, 2 },
 }
 
-enum BitWidth : char (char size, char bit_size)
+enum BitWidth : char (char size, usz bit_size)
 {
     W8 = { 1, 8 },
     W16 = { 2, 16 },

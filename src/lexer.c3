@@ -189,7 +189,7 @@ fn Tokens! lex(char[] to_lex)
       }
       else if (ch == ']')
       {
-        lexed.push({ "]", DEREF_END });
+//        lexed.push({ "]", DEREF_END });
         continue;
       }
     }

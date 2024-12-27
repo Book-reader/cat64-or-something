@@ -7,21 +7,53 @@ import std::io;
 import std::collections::list;
 import std::collections::tuple;
 
-struct InstructionTok
+struct InstTok(Printable)
 {
-  TokenType type;
+  InstructionType type;
   BitWidth arg1_type;
   BitWidth arg2_type;
   TokenArg arg1;
   TokenArg arg2;
 }
 
+fn usz! InstTok.to_format(&self, Formatter* formatter) @dynamic
+{
+  usz! n = formatter.printf("%s:[ ", self.type);
+  $foreach ($arg : {"arg1", "arg2"})
+    n += formatter.printf("(%s ", self.$eval($arg +++ "_type"));
+    if OUTER: (true)
+    {
+      $foreach ($width : BitWidth.values)
+        if (self.$eval($arg +++ "_type") == $width)
+        {
+          n += formatter.printf("%s) ", self.$eval($arg).$eval("as_" +++ $width.nameof));
+          break OUTER;
+        }
+      $endforeach
+    /*switch (self.$eval($arg +++ "_type"))
+    {
+      case W8:
+        n += formatter.printf("%s),", self.$eval($arg).as_8);
+      case W16:
+        n += formatter.printf("%s),", self.$eval($arg).as_16);
+      case W32:
+        n += formatter.printf("%s),", self.$eval($arg).as_32);
+      case W64:
+        n += formatter.printf("%s),", self.$eval($arg).as_64);
+    }*/
+    }
+  $endforeach
+  n += formatter.print("]");
+
+  return n; 
+}
+
 union TokenArg
 {
-  char as_8;
-  ushort as_16;
-  uint as_32;
-  ulong as_64;
+  char as_W8;
+  ushort as_W16;
+  uint as_W32;
+  ulong as_W64;
 }
 
 
@@ -64,6 +96,8 @@ fn int main(String[] args) @if($feature(ASSEMBLER))
   out_file.write(data.array_view())!!;
   out_file.close()!!;
 
+
+  io::printfn("%s", InstTok{JIF, W8, W64, {.as_W8 = 01}, {.as_W64 = 0xb}});
   return 0;
 }
 
