@@ -120,6 +120,7 @@ enum TokenType
   INSTRUCTION,
   REGISTER,
   DEREF,
+  DEREF_END,
   LABEL_DECL,
   LABEL,
   ARG_SEP,
@@ -188,6 +189,7 @@ fn Tokens! lex(char[] to_lex)
       }
       else if (ch == ']')
       {
+        lexed.push({ "]", DEREF_END });
         continue;
       }
     }

@@ -7,10 +7,23 @@ import std::io;
 import std::collections::list;
 import std::collections::tuple;
 
-enum PseudoInstruction : (String name, String into)
+struct InstructionTok
 {
-//  CALL = { "call", "push " }
+  TokenType type;
+  BitWidth arg1_type;
+  BitWidth arg2_type;
+  TokenArg arg1;
+  TokenArg arg2;
 }
+
+union TokenArg
+{
+  char as_8;
+  ushort as_16;
+  uint as_32;
+  ulong as_64;
+}
+
 
 fn int main(String[] args) @if($feature(ASSEMBLER))
 {
@@ -208,14 +221,7 @@ fn void! validate_argument(Tokens arg)
    {
      switch (token.type)
      {
-       case CHAR:
-       case DEREF:
-       case NUMBER:
-       case REGISTER:
-       case LABEL:
-       case STRING:
-       case ARG_SEP:
-       case INSTRUCTION:
+       default:
          collected.push(token);
        case LABEL_DECL:
      }
