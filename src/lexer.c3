@@ -4,10 +4,38 @@ import common;
 
 import std::io;
 import std::collections::list;
-import std::collections::map;
 
-def Tokens = List(<Token>);
+def Expr = List(<Token>);
+def Prog = List(<Expr>);
 
+struct Token(Printable)
+{
+  String lexme;
+  TokenType type;
+  String label;
+}
+
+fn usz! Token.to_format(&self, Formatter* formatter) @dynamic
+{
+  return formatter.printf("'%s':%s", self.lexme, self.type);
+}
+
+enum TokenType
+{
+  STRING,
+  CHAR,
+  NUMBER,
+  INSTRUCTION,
+  REGISTER,
+  DEREF,
+  DEREF_END,
+//  LABEL_DECL,
+  LABEL,
+  ARG_SEP,
+}
+
+
+/*
 const String[] VALID_SUFFIXES = {"8", "16", "32", "64"};
 
 const String[common::NUM_REGISTERS] REG_NAMES = {"r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7"};
@@ -43,7 +71,7 @@ fault InstructionFault
   INCORRECT_SIZE_PREFIX,
 }
 
-HashMap(<String, usz>) labels;
+List(<String>) labels;
 
 fn bool! check_valid_instruction(String data)
 {
@@ -101,37 +129,18 @@ fn bool is_valid_label(String data)
   return true;
 }
 
-struct Token(Printable)
-{
-  String lexme;
-  TokenType type;
-}
-
-fn usz! Token.to_format(&self, Formatter* formatter) @dynamic
-{
-  return formatter.printf("'%s':%s", self.lexme, self.type);
-}
-
-enum TokenType
-{
-  STRING,
-  CHAR,
-  NUMBER,
-  INSTRUCTION,
-  REGISTER,
-  DEREF,
-  DEREF_END,
-  LABEL_DECL,
-  LABEL,
-  ARG_SEP,
-}
-
+*/
 const String SEPERATORS = {' ', ',', '\n', '\r', '\t', '\0'};
 const char ARG_SEP = ',';
 
-fn Tokens! lex(char[] to_lex)
+fn Prog! lex(char[] to_lex)
 {
-  Tokens lexed;
+  Prog lexed;
+/*  Tokens* curr_line;
+  lexed.push({});
+  curr_line = lexed.get_ref(lexed.len() - 1);
+  String label;
+
   DString curr_tok;//.str_copy()
 
   bool in_string = false;
@@ -150,7 +159,7 @@ fn Tokens! lex(char[] to_lex)
     }
     else if (ch == '"')
     {
-   /*   if (curr_tok.len() != 0)
+   /*   if (curr_line.len() != 0)
       {
         common::error("found string in the middle of token");
       }
@@ -161,19 +170,19 @@ fn Tokens! lex(char[] to_lex)
       }
       else
       {
-        lexed.push({ curr_tok.copy_str(), STRING });
-        curr_tok.clear();
+        lexed.push({ curr_line.copy_str(), STRING });
+        curr_line.clear();
         continue;
       }
     }
     else if (ch == '\\')
     {
-      curr_tok.append(to_lex[++i]);
+      curr_line.append(to_lex[++i]);
       continue;
     }
     else if (ch == '\'')
     {
-      if (curr_tok.len() != 0) common::error("Found char in the middle of token");
+      if (curr_line.len() != 0) common::error("Found char in the middle of token");
       ch = to_lex[++i];
       lexed.push( { String{ch}.copy(), CHAR } );
       if (to_lex[++i] != '\'') common::error("Error on char");
@@ -198,46 +207,49 @@ fn Tokens! lex(char[] to_lex)
     if (SEPERATORS.contains_char(ch))
     {
       TokenType t;
-      if (curr_tok.len() == 0)
+      if (curr_line.len() == 0)
       {
         continue;
       }
-      else if (check_valid_instruction(curr_tok.str_view())!)
+      else if (check_valid_instruction(curr_line.str_view())!)
       {
         t = INSTRUCTION;
       }
-      else if (is_valid_register(curr_tok.str_view()))
+      else if (is_valid_register(curr_line.str_view()))
       {
         t = REGISTER;
       }
-      else if (is_valid_number(curr_tok.str_view()))
+      else if (is_valid_number(curr_line.str_view()))
       {
         t = NUMBER;
       }
-      else if (is_valid_label_decl(curr_tok.str_view()))
+      else if (is_valid_label_decl(curr_line.str_view()))
       {
-        t = LABEL_DECL;
-        labels.set(curr_tok.copy_str()[..curr_tok.len() - 2], -1);
+        //t = LABEL_DECL;
+        label = curr_line.copy_str()[..curr_line.len() - 2];
+        labels.push(label.copy());
+//        labels.set(curr_line.copy_str()[..curr_line.len() - 2], -1);
       }
-      else if (is_valid_label(curr_tok.str_view()))
+      else if (is_valid_label(curr_line.str_view()))
       {
         t = LABEL;
       }
       else
       {
-        common::error("Unsupported data: '%s'", curr_tok.str_view());
+        common::error("Unsupported data: '%s'", curr_line.str_view());
       }
-      lexed.push({ curr_tok.copy_str(), t });
-      curr_tok.clear();
+      lexed.push({ curr_line.copy_str(), t, label });
+      label = "";
+      curr_line.clear();
       if (ch == ARG_SEP)
       {
-        lexed.push({ String{ ch }.copy(), ARG_SEP });
+        lexed.push({ String{ ch }.copy(), ARG_SEP, "" });
       }
       continue;
     }
     
-    curr_tok.append(ch);
-  }
+    curr_line.append(ch);
+  }*/
   return lexed;
 }
 

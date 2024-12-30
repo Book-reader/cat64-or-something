@@ -34,7 +34,7 @@ bitstruct Instruction : InstSize @overlap
     bool real : 15;
 }
 
-enum InstructionType : char (String name, bool sized, bool args_len)
+enum InstructionType : char (String name, bool sized, char args_len)
 {
     // Do nothing
     NOP = { "nop", false, 0 },
