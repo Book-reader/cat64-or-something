@@ -82,11 +82,11 @@ enum OpType : char
 enum Condition : char
 {
     EQ,
-    NEQ,
+    NE,
     GT,
-    GTEQ,
+    GE,
     LT,
-    LTEQ,
+    LE,
 }
 
 enum OffsetKind : char

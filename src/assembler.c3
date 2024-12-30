@@ -13,11 +13,40 @@ struct InstTok(Printable)
 {
   InstructionType type;
   BitWidth inst_width;
-  String label;
-  TokArgType arg_dst_type;
-  TokArgType arg_src_type;
-  TokenArg arg_dst;
-  TokenArg arg_src;
+  String label; 
+  Arg arg_dst;
+  Arg arg_src;
+}
+
+struct Arg
+{
+  ArgType type;
+  BitWidth size;
+  ArgData data;
+}
+
+union ArgData
+{
+  char as_NONE;
+  String as_LABEL;
+  ulong as_PTR;
+  char as_REG;
+  char as_REGPTR;
+
+  char as_NUMW8;
+  ushort as_NUMW16;
+  uint as_NUMW32;
+  ulong as_NUMW64;
+}
+
+enum ArgType : char (OpType op)
+{
+  PTR = PTR,
+  NUM = NUM,
+  REG = REG,
+  REGPTR = REGPTR,
+  NONE = PTR,
+  LABEL = NUM,
 }
 
 fn usz InstTok.byte_offset(&self, LProg* prog, usz own_idx, bool start = true)
@@ -33,24 +62,71 @@ fn usz InstTok.byte_offset(&self, LProg* prog, usz own_idx, bool start = true)
 
 fn usz InstTok.size(&self)
 {
-  return Instruction.sizeof + self.arg_dst_type.size + self.arg_src_type.size; 
+  return Instruction.sizeof + self.@get_size(arg_dst) + self.@get_size(arg_src); 
+}
+
+macro usz InstTok.@get_size(&self, #arg)
+{
+  switch (self.#arg.type)
+  {
+    case NUM:
+      @eachif(BitWidth, self.inst_width; $bitwidth)
+      {
+        return $bitwidth.size;
+      };
+    default:
+      @eachif(ArgType, self.#arg.type; $type)
+      {
+        $if ($type != NUM):
+          return $sizeof(self.#arg.data.$eval("as_" +++ $type.nameof));
+        $endif
+      };
+  }
+  unreachable();
+}
+
+macro @eachif($Enum, value; @body($matching_value))
+{
+  $foreach ($value : $Enum.values)
+    if ($value == value)
+    {
+      @body($value);
+      return;
+    }
+  $endforeach
 }
 
 fn usz! InstTok.to_format(&self, Formatter* formatter) @dynamic
 {
   usz! n = formatter.printf("%s.%s:[ ", self.type, self.inst_width);
-  $foreach ($arg : {"dst", "src"})
-    n += formatter.printf("(%s", self.$eval("arg_" +++ $arg +++ "_type"));
-    if OUTER: (true)
+  $foreach ($arg : {"arg_dst", "arg_src"})
+    n += formatter.printf("(%s", self.$eval($arg).type);
+    @eachif(ArgType, self.$eval($arg).type; $width)
     {
-      $foreach ($width : TokArgType.values)
-        if (self.$eval("arg_" +++ $arg +++ "_type") == $width)
+      $if $width == NUM:
+        @eachif(BitWidth, self.inst_width; $bitwidth)
         {
-          n += formatter.printf(":%s %s) ", $width.size, self.$eval("arg_" +++ $arg).$eval("as_" +++ $width.nameof));
+          n += formatter.printf(":%s %s) ", self.@get_size($eval($arg)), self.$eval($arg).data.$eval("as_" +++ $width.nameof +++ $bitwidth.nameof));
+        };
+      $else
+       n += formatter.printf(":%s %s) ", self.@get_size($eval($arg)), self.$eval($arg).data.$eval("as_" +++ $width.nameof));
+      $endif
+    };
+/*    if OUTER: (true)
+    {
+      $foreach ($width : ArgType.values)
+        if (self.$eval("arg_" +++ $arg).type == $width)
+        {
+          $if $width == NUM:
+            //$foreach 
+           // n += formatter.printf(":%s %s) ", $width.size, self.$eval("arg_" +++ $arg).$eval("as_" +++ $width.nameof +++));
+          $else
+//            n += formatter.printf(":%s %s) ", $width.size, self.$eval("arg_" +++ $arg).$eval("as_" +++ $width.nameof));
+          $endif
           break OUTER;
         }
       $endforeach
-    }
+    }*/
 
   $endforeach
   if (self.label.len > 0)
@@ -62,31 +138,6 @@ fn usz! InstTok.to_format(&self, Formatter* formatter) @dynamic
 
   return n; 
 }
-
-union TokenArg
-{
-  char as_NONE;
-  char as_REG;
-  char as_REGPTR;
-  char as_W8;
-  ushort as_W16;
-  uint as_W32;
-  ulong as_W64;
-  String as_LABEL;
-}
-
-enum TokArgType : char (usz size)
-{
-  NONE = 0,
-  REG = 1,
-  REGPTR = 1,
-  W8 = 1,
-  W16 = 2,
-  W32 = 4,
-  W64 = 8,
-  LABEL = 8,
-}
-
 
 fn int main(String[] args) @if($feature(ASSEMBLER))
 {
@@ -115,12 +166,23 @@ fn int main(String[] args) @if($feature(ASSEMBLER))
    *   jmp main
   */
   LProg test;
+/*struct InstTok(Printable)
+{
+  InstructionType type;
+  BitWidth inst_width;
+  String label; 
+  Arg arg_dst;
+  Arg arg_src;
+}*/
+
+
+
   test.add_array({
-    {MOV, W64, "", REG, W64, {.as_REG = 1}, {.as_W64 = 0xff}},
-    {MOV, W8, "main", REG, REGPTR, {.as_REG = 0}, {.as_REGPTR = 1}},
-    {PRINTC, W8, "", NONE, NONE, {}, {}},
-    {ADD, W64, "", REG, W64, {.as_REG = 1}, {.as_W64 = 1}},
-    {JMP, W8, "", LABEL, NONE, {.as_LABEL = "main"}, {}},
+    {MOV, W64, "", {REG, {}, {.as_REG = 1}}, {NUM, W64, {.as_NUMW64 = 0xff}}},
+//    {MOV, W8, "main", REG, REGPTR, {.as_REG = 0}, {.as_REGPTR = 1}},
+//    {PRINTC, W8, "", NONE, NONE, {}, {}},
+//    {ADD, W64, "", REG, W64, {.as_REG = 1}, {.as_W64 = 1}},
+//    {JMP, W8, "", LABEL, NONE, {.as_LABEL = "main"}, {}},
   });
 
   foreach (idx, i : test)

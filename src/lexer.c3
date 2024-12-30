@@ -20,7 +20,7 @@ fn usz! Token.to_format(&self, Formatter* formatter) @dynamic
   return formatter.printf("'%s':%s", self.lexme, self.type);
 }
 
-enum TokenType
+enum TokenType : char
 {
   STRING,
   CHAR,
