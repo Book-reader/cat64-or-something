@@ -70,12 +70,12 @@ macro usz InstTok.@get_size(&self, #arg)
   switch (self.#arg.type)
   {
     case NUM:
-      @eachif(BitWidth, self.inst_width; $bitwidth)
+      @eachif(self.inst_width; $bitwidth)
       {
         return $bitwidth.size;
       };
     default:
-      @eachif(ArgType, self.#arg.type; $type)
+      @eachif(self.#arg.type; $type)
       {
         $if ($type != NUM):
           return $sizeof(self.#arg.data.$eval("as_" +++ $type.nameof));
@@ -85,8 +85,9 @@ macro usz InstTok.@get_size(&self, #arg)
   unreachable();
 }
 
-macro @eachif($Enum, value; @body($matching_value))
+macro @eachif(value; @body($matching_value))
 {
+  var $Enum = $typeof(value);
   $foreach ($value : $Enum.values)
     if ($value == value)
     {
@@ -101,10 +102,10 @@ fn usz! InstTok.to_format(&self, Formatter* formatter) @dynamic
   usz! n = formatter.printf("%s.%s:[ ", self.type, self.inst_width);
   $foreach ($arg : {"arg_dst", "arg_src"})
     n += formatter.printf("(%s", self.$eval($arg).type);
-    @eachif(ArgType, self.$eval($arg).type; $width)
+    @eachif(self.$eval($arg).type; $width)
     {
       $if $width == NUM:
-        @eachif(BitWidth, self.inst_width; $bitwidth)
+        @eachif(self.inst_width; $bitwidth)
         {
           n += formatter.printf(":%s %s) ", self.@get_size($eval($arg)), self.$eval($arg).data.$eval("as_" +++ $width.nameof +++ $bitwidth.nameof));
         };
