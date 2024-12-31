@@ -33,10 +33,10 @@ union ArgData
   char as_REG;
   char as_REGPTR;
 
-  char as_NUMW8;
-  ushort as_NUMW16;
-  uint as_NUMW32;
-  ulong as_NUMW64;
+  char as_NUM_W8;
+  ushort as_NUM_W16;
+  uint as_NUM_W32;
+  ulong as_NUM_W64;
 }
 
 enum ArgType : char (OpType op)
@@ -107,7 +107,7 @@ fn usz! InstTok.to_format(&self, Formatter* formatter) @dynamic
       $if $width == NUM:
         @eachif(self.inst_width; $bitwidth)
         {
-          n += formatter.printf(":%s %s) ", self.@get_size($eval($arg)), self.$eval($arg).data.$eval("as_" +++ $width.nameof +++ $bitwidth.nameof));
+          n += formatter.printf(":%s %s) ", self.@get_size($eval($arg)), self.$eval($arg).data.$eval("as_" +++ $width.nameof +++ "_" +++ $bitwidth.nameof));
         };
       $else
        n += formatter.printf(":%s %s) ", self.@get_size($eval($arg)), self.$eval($arg).data.$eval("as_" +++ $width.nameof));
@@ -179,7 +179,7 @@ fn int main(String[] args) @if($feature(ASSEMBLER))
 
 
   test.add_array({
-    {MOV, W64, "", {REG, {}, {.as_REG = 1}}, {NUM, W64, {.as_NUMW64 = 0xff}}},
+    {MOV, W64, "", {REG, {}, {.as_REG = 1}}, {NUM, W64, {.as_NUM_W64 = 0xff}}},
 //    {MOV, W8, "main", REG, REGPTR, {.as_REG = 0}, {.as_REGPTR = 1}},
 //    {PRINTC, W8, "", NONE, NONE, {}, {}},
 //    {ADD, W64, "", REG, W64, {.as_REG = 1}, {.as_W64 = 1}},
