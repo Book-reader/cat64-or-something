@@ -25,16 +25,15 @@ bitstruct Instruction : InstSize @overlap
     BitWidth width : 5..6;
     // 
     Condition jif_cond : 7..8;
-    OpType src_type : 7..8;
-    OpType dst_type : 9..10;
+    OpType src_type : 7..9;
+    OpType dst_type : 10..12;
 //    Condition cond : 11..13;
-    OffsetKind offset_kind : 11..12;
-    bool jif_rel : 13;
+    OffsetKind offset_kind : 12..13;
     
     bool real : 15;
 }
 
-enum InstructionType : char (String name, bool sized, char args_len)
+enum InstructionType : char (String name, bool sized, char args)
 {
     // Do nothing
     NOP = { "nop", false, 0 },
@@ -62,12 +61,12 @@ enum InstructionType : char (String name, bool sized, char args_len)
     XNOR = { "xnor", true, 2 },
 }
 
-enum BitWidth : char (char size, usz bit_size)
+enum BitWidth : char (char size, usz bit_size, String name)
 {
-    W8 = { 1, 8 },
-    W16 = { 2, 16 },
-    W32 = { 4, 32 },
-    W64 = { 8, 64 },
+    W8 = { 1, 8, "8" },
+    W16 = { 2, 16, "16" },
+    W32 = { 4, 32, "32" },
+    W64 = { 8, 64, "64" },
 }
 
 enum OpType : char
@@ -76,6 +75,7 @@ enum OpType : char
     NUM,
     REG,
     REGPTR,
+    LABEL,
 }
 
 
@@ -141,7 +141,7 @@ macro void error(String format, ...)
     $if (env::COMPILER_SAFE_MODE):
         unreachable(format, $vasplat);
     $else
-        io::eprintf("ERROR: %s:%s ", $$FILE, $$LINE);
+        io::eprintf("ERROR: %s:%s:%s ", $$FILE, $$FUNC, $$LINE);
         io::eprintfn(format, $vasplat);
         thread::exit(1);
         unreachable();

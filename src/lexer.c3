@@ -12,7 +12,6 @@ struct Token(Printable)
 {
   String lexme;
   TokenType type;
-  String label;
 }
 
 fn usz! Token.to_format(&self, Formatter* formatter) @dynamic
@@ -28,19 +27,20 @@ enum TokenType : char
   INSTRUCTION,
   REGISTER,
   DEREF,
-  DEREF_END,
-//  LABEL_DECL,
   LABEL,
   ARG_SEP,
+  LABEL_DECL,
 }
 
 
-/*
-const String[] VALID_SUFFIXES = {"8", "16", "32", "64"};
+
+const String[BitWidth.elements] VALID_SUFFIXES = {"8", "16", "32", "64"};
+
+$assert(VALID_SUFFIXES[0] == BitWidth.W8.name);
 
 const String[common::NUM_REGISTERS] REG_NAMES = {"r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7"};
 
-const char COMMENT = ';';
+const char COMMENT = '#';
 
 fn bool String[].contains(&self, String pointer)
 {
@@ -59,10 +59,9 @@ fn usz! String[].index_of(&self, String pointer)
 
 fn bool String.contains_char(s, char needle)
 {
-	return @ok(s.index_of_char(needle));
+  return @ok(s.index_of_char(needle));
 }
 
-//fn 
 fault InstructionFault
 {
   NOT_INSTRUCTION,
@@ -84,7 +83,7 @@ fn bool! check_valid_instruction(String data)
         if (data.len == $instruction.name.len) return true;
         return InstructionFault.SIZE_IN_UNSIZED_INSTRUCTION?;
       }
-      if (data.len > $instruction.name.len + 1 && data[$instruction.name.len] == '.' && VALID_SUFFIXES.contains(data[$instruction.name.len+1..])) return true;
+      if (data.len > $instruction.name.len + 1 && data[$instruction.name.len] == '.' && VALID_SUFFIXES[..].contains(data[$instruction.name.len+1..])) return true;
 
       return InstructionFault.NO_SIZE_IN_SIZED_INSTRUCTION?;
     }
@@ -113,11 +112,11 @@ const String INVALID_LABEL = "0123456789.:";
 
 fn bool is_valid_label_decl(String data)
 {
-  foreach (ch : data[0..data.len - 2])
+  foreach (ch : data[..^2])
   {
     if (INVALID_LABEL.contains_char(ch)) return false;
   }
-  return data[data.len - 1] == ':';
+  return data[^1] == ':';
 }
 
 fn bool is_valid_label(String data)
@@ -129,17 +128,14 @@ fn bool is_valid_label(String data)
   return true;
 }
 
-*/
-const String SEPERATORS = {' ', ',', '\n', '\r', '\t', '\0'};
+const String SEPERATORS = {' ', ',', '\n', '\r', '\t', '\0', ';'};
+const String EOEXPR = {';', '\n', '\r'};
 const char ARG_SEP = ',';
 
 fn Prog! lex(char[] to_lex)
 {
   Prog lexed;
-/*  Tokens* curr_line;
-  lexed.push({});
-  curr_line = lexed.get_ref(lexed.len() - 1);
-  String label;
+  Expr expr;
 
   DString curr_tok;//.str_copy()
 
@@ -159,7 +155,7 @@ fn Prog! lex(char[] to_lex)
     }
     else if (ch == '"')
     {
-   /*   if (curr_line.len() != 0)
+   /*   if (curr_tok.len() != 0)
       {
         common::error("found string in the middle of token");
       }
@@ -170,21 +166,21 @@ fn Prog! lex(char[] to_lex)
       }
       else
       {
-        lexed.push({ curr_line.copy_str(), STRING });
-        curr_line.clear();
+        expr.push({ curr_tok.copy_str(), STRING });
+        curr_tok.clear();
         continue;
       }
     }
     else if (ch == '\\')
     {
-      curr_line.append(to_lex[++i]);
+      curr_tok.append(to_lex[++i]);
       continue;
     }
     else if (ch == '\'')
     {
-      if (curr_line.len() != 0) common::error("Found char in the middle of token");
+      if (curr_tok.len() != 0) common::error("Found char in the middle of token");
       ch = to_lex[++i];
-      lexed.push( { String{ch}.copy(), CHAR } );
+      expr.push( { String{ch}.copy(), CHAR } );
       if (to_lex[++i] != '\'') common::error("Error on char");
       continue;
     }
@@ -193,63 +189,69 @@ fn Prog! lex(char[] to_lex)
     {
       if (ch == '[')
       {
-        lexed.push({ "[", DEREF });
+        expr.push({ "[", DEREF });
         continue;
       }
       else if (ch == ']')
       {
-//        lexed.push({ "]", DEREF_END });
+//        expr.push({ "]", DEREF_END });
         continue;
       }
     }
 
 
+    if (in_string) continue;
     if (SEPERATORS.contains_char(ch))
     {
       TokenType t;
-      if (curr_line.len() == 0)
+      if (curr_tok.len() == 0)
       {
         continue;
       }
-      else if (check_valid_instruction(curr_line.str_view())!)
+      else if (check_valid_instruction(curr_tok.str_view())!)
       {
         t = INSTRUCTION;
       }
-      else if (is_valid_register(curr_line.str_view()))
+      else if (is_valid_register(curr_tok.str_view()))
       {
         t = REGISTER;
       }
-      else if (is_valid_number(curr_line.str_view()))
+      else if (is_valid_number(curr_tok.str_view()))
       {
         t = NUMBER;
       }
-      else if (is_valid_label_decl(curr_line.str_view()))
+      else if (is_valid_label_decl(curr_tok.str_view()))
       {
-        //t = LABEL_DECL;
-        label = curr_line.copy_str()[..curr_line.len() - 2];
-        labels.push(label.copy());
-//        labels.set(curr_line.copy_str()[..curr_line.len() - 2], -1);
+        t = LABEL_DECL;
       }
-      else if (is_valid_label(curr_line.str_view()))
+      else if (is_valid_label(curr_tok.str_view()))
       {
         t = LABEL;
       }
       else
       {
-        common::error("Unsupported data: '%s'", curr_line.str_view());
+        common::error("Unsupported data: '%s'", curr_tok.str_view());
       }
-      lexed.push({ curr_line.copy_str(), t, label });
-      label = "";
-      curr_line.clear();
+      expr.push({ curr_tok.copy_str(), t });
+      curr_tok.clear();
       if (ch == ARG_SEP)
       {
-        lexed.push({ String{ ch }.copy(), ARG_SEP, "" });
+        expr.push({ String{ ch }.copy(), ARG_SEP });
       }
+
+     if (EOEXPR.contains_char(ch) && ((expr.len() > 1 && expr[0].type == LABEL_DECL) || (expr.len() > 0 && expr[0].type == INSTRUCTION)))
+     {
+       io::printfn("expr is: %s", expr);
+       io::printfn("eoexpr was: '%c' '%d'", ch, ch);
+       lexed.push(expr);
+       expr = {};
+     }
+
       continue;
     }
     
-    curr_line.append(ch);
-  }*/
+    curr_tok.append(ch);
+  }
   return lexed;
 }
 

@@ -8,11 +8,19 @@ import std::collections::list;
 import std::collections::tuple;
 
 def LProg = List(<InstTok>);
+def Bytes = List(<char>);
+
+macro Bytes Bytes.new(...) @operator(construct)
+{
+  Bytes b;
+  b.new_init($vasplat);
+  return b;
+}
 
 struct InstTok(Printable)
 {
   InstructionType type;
-  BitWidth inst_width;
+  BitWidth width;
   String label; 
   Arg arg_dst;
   Arg arg_src;
@@ -29,6 +37,7 @@ union ArgData
 {
   char as_NONE;
   String as_LABEL;
+  String as_LABEL_DEREF;
   ulong as_PTR;
   char as_REG;
   char as_REGPTR;
@@ -47,9 +56,10 @@ enum ArgType : char (OpType op)
   REGPTR = REGPTR,
   NONE = PTR,
   LABEL = NUM,
+  LABEL_DEREF = PTR,
 }
 
-fn usz InstTok.byte_offset(&self, LProg* prog, usz own_idx, bool start = true)
+fn usz InstTok.byte_offset(&self, LProg* prog, usz own_idx)
 {
   usz count;
   for (int i = 0; i < own_idx; i++)
@@ -62,18 +72,19 @@ fn usz InstTok.byte_offset(&self, LProg* prog, usz own_idx, bool start = true)
 
 fn usz InstTok.size(&self)
 {
-  return Instruction.sizeof + self.@get_size(arg_dst) + self.@get_size(arg_src); 
+  return Instruction.sizeof + self.@get_arg_size(arg_dst) + self.@get_arg_size(arg_src); 
 }
 
-macro usz InstTok.@get_size(&self, #arg)
+macro usz InstTok.@get_arg_size(&self, #arg)
 {
   switch (self.#arg.type)
   {
     case NUM:
-      @eachif(self.inst_width; $bitwidth)
+      return self.#arg.size.size;
+/*      @eachif(self.width; $bitwidth)
       {
         return $bitwidth.size;
-      };
+      };*/
     default:
       @eachif(self.#arg.type; $type)
       {
@@ -85,49 +96,76 @@ macro usz InstTok.@get_size(&self, #arg)
   unreachable();
 }
 
-macro @eachif(value; @body($matching_value))
+fn Bytes InstTok.to_bytes(&self, LProg* prog, usz own_idx)
 {
-  var $Enum = $typeof(value);
-  $foreach ($value : $Enum.values)
-    if ($value == value)
+  Bytes b = Bytes.new();
+  b.add_array(common::to_bytes(W16, (InstSize)self.to_instruction()));
+  common::error("TODO");
+//  return b;
+}
+
+fn Instruction InstTok.to_instruction(&self)
+{
+   Instruction inst;
+
+   return inst;
+}
+
+fn usz InstTok.resolve_label(&self, LProg* prog, String name)
+{
+  foreach (idx, i : prog)
+  {
+    if (i.label == name)
     {
+      return i.byte_offset(prog , idx);
+    }
+  }
+  common::error("Label %s does not exist", name);
+}
+
+macro @eachif(value, $Enum = void, #attribute = null; @body($matching_value))
+{
+  $if $Enum.typeid == void.typeid:
+    $Enum = $typeof(value);
+  $endif
+  $foreach ($value : $Enum.values)
+    var $val_at;
+    $if $stringify(#attribute) == "null":
+      $val_at = $value;
+    $else
+      $val_at = $value.#attribute;
+    $endif
+//    io::printfn("comparing c:%s to r:%s", $val_at, value);
+    if ($val_at == value)
+    {
+//      io::printfn("c:%s and r:%s match", $val_at, value);
       @body($value);
       return;
     }
   $endforeach
+  $if $stringify(#attribute) == "null":
+    unreachable();
+  $else
+    return SearchResult.MISSING?;
+  $endif
 }
 
 fn usz! InstTok.to_format(&self, Formatter* formatter) @dynamic
 {
-  usz! n = formatter.printf("%s.%s:[ ", self.type, self.inst_width);
+  usz! n = formatter.printf("%s.%s:[ ", self.type, self.width);
   $foreach ($arg : {"arg_dst", "arg_src"})
     n += formatter.printf("(%s", self.$eval($arg).type);
     @eachif(self.$eval($arg).type; $width)
     {
       $if $width == NUM:
-        @eachif(self.inst_width; $bitwidth)
+        @eachif(self.width; $bitwidth)
         {
-          n += formatter.printf(":%s %s) ", self.@get_size($eval($arg)), self.$eval($arg).data.$eval("as_" +++ $width.nameof +++ "_" +++ $bitwidth.nameof));
+          n += formatter.printf("_%s:%s %s) ", $bitwidth, self.@get_arg_size($eval($arg)), self.$eval($arg).data.$eval("as_NUM" +++ "_" +++ $bitwidth.nameof));
         };
       $else
-       n += formatter.printf(":%s %s) ", self.@get_size($eval($arg)), self.$eval($arg).data.$eval("as_" +++ $width.nameof));
+       n += formatter.printf(":%s %s) ", self.@get_arg_size($eval($arg)), self.$eval($arg).data.$eval("as_" +++ $width.nameof));
       $endif
     };
-/*    if OUTER: (true)
-    {
-      $foreach ($width : ArgType.values)
-        if (self.$eval("arg_" +++ $arg).type == $width)
-        {
-          $if $width == NUM:
-            //$foreach 
-           // n += formatter.printf(":%s %s) ", $width.size, self.$eval("arg_" +++ $arg).$eval("as_" +++ $width.nameof +++));
-          $else
-//            n += formatter.printf(":%s %s) ", $width.size, self.$eval("arg_" +++ $arg).$eval("as_" +++ $width.nameof));
-          $endif
-          break OUTER;
-        }
-      $endforeach
-    }*/
 
   $endforeach
   if (self.label.len > 0)
@@ -158,40 +196,20 @@ fn int main(String[] args) @if($feature(ASSEMBLER))
     common::error("Error while lexing tokens: %s", err);
   }
 
-  /*
-   * mov.64, r1, 0xff
-   * main:
-   *   mov.8, r0, [r1]
-   *   printc.8
-   *   add.64, r1, 1
-   *   jmp main
-  */
-  LProg test;
-/*struct InstTok(Printable)
-{
-  InstructionType type;
-  BitWidth inst_width;
-  String label; 
-  Arg arg_dst;
-  Arg arg_src;
-}*/
+  io::printfn("lexed: %s", lexed);
 
+  LProg prog = build(lexed);
+  io::printfn("built: %s", prog);
 
+  Bytes generated = Bytes.new();
+  foreach (i, tok : prog) generated.add_all(&&tok.to_bytes(&prog, i));
 
-  test.add_array({
-    {MOV, W64, "", {REG, {}, {.as_REG = 1}}, {NUM, W64, {.as_NUM_W64 = 0xff}}},
-//    {MOV, W8, "main", REG, REGPTR, {.as_REG = 0}, {.as_REGPTR = 1}},
-//    {PRINTC, W8, "", NONE, NONE, {}, {}},
-//    {ADD, W64, "", REG, W64, {.as_REG = 1}, {.as_W64 = 1}},
-//    {JMP, W8, "", LABEL, NONE, {.as_LABEL = "main"}, {}},
-  });
-
-  foreach (idx, i : test)
+  io::printn("generated: ");
+  foreach (ch : generated)
   {
-    io::printfn("%s %s: size:%s offset:%s", idx, i, i.size(), i.byte_offset(&test, idx));
+    io::print(ch);
   }
-
-  foreach (expr : lexed) foreach (tok : expr) io::printfn("token '%s':%s", tok.lexme, tok.type);
+  io::printn();
 /*
   List(<char>) data;
   data.new_init();
@@ -212,6 +230,168 @@ fn int main(String[] args) @if($feature(ASSEMBLER))
 
   return 0;
 }
+
+fn LProg build(Prog lexed)
+{
+io::printfn("building %s", lexed);
+  LProg prog;
+
+  foreach (expr : lexed)
+  {
+    InstTok! tok = build_expr(expr);
+    if (catch err = tok)
+    {
+      common::error("error in expression '%s': %s", expr, err);
+    }
+    prog.push(tok);
+  }
+
+  return prog;
+}
+
+fault ExprError
+{
+  EXPECTED_INSTRUCTION,
+  TOO_MANY_ARGS,
+}
+
+fn InstTok! build_expr(Expr expr)
+{
+  io::printfn("building expr: %s", expr);
+  InstTok tok;
+
+  usz i = 0;
+  if (expr[i].type == LABEL_DECL)
+  {
+    tok.label = expr[0].lexme[..^2];
+    i++;
+  }
+  if (expr[i].type != INSTRUCTION) return ExprError.EXPECTED_INSTRUCTION?;
+
+  usz idx = expr[i].lexme.len - 1;
+
+  bool has_size = false;
+  if (try val = expr[i].lexme.index_of_char('.'))
+  {
+    idx = val - 1;
+    has_size = true;
+  }
+
+  tok.type = @enum_from_value(InstructionType, name, expr[i].lexme[..idx])!;
+  /*@eachif(expr[i].lexme[..idx], InstructionType, name; $inst_type)
+  {
+    tok.type = $inst_type;
+  }!;*/
+  io::printfn("token type: %s", tok.type);
+
+  if (has_size)
+  {
+    tok.width = @enum_from_value(BitWidth, name, expr[i].lexme[idx+2..])!;
+    io::printfn("token size: %s", tok.width);
+  }
+
+  if (tok.type.args > 0)
+  {
+    usz old_i = i+1;
+    usz set_args = 0;
+    for (; i < expr.len(); i++)
+    {
+      if (expr[i].type == ARG_SEP || i == expr.len() - 1)
+      {
+        Arg arg = build_arg(tok, expr.array_view()[old_i..i == expr.len()-1 ? i : i - 1])!;
+        old_i = i+1;
+        if (set_args >= tok.type.args)
+        {
+          return ExprError.TOO_MANY_ARGS?;
+        }
+        else if (set_args == 0)
+        {
+          tok.arg_dst = arg;
+        }
+        else if (set_args == 1)
+        {
+          tok.arg_src = arg;
+        }
+        else
+        {
+          common::error("Instruction has more than two arguments");
+        }
+        set_args ++;
+      }
+    }
+  }
+
+
+
+  return tok;
+}
+
+fn Arg! build_arg(InstTok inst, Token[] arg_tok)
+{
+  Arg arg;
+  io::printfn("building arg: %s", arg_tok);
+
+  bool deref = false;
+
+  usz i = 0;
+
+  if (arg_tok[0].type == DEREF)
+  {
+    deref = true;
+    i = 1;
+  }
+
+  if (arg_tok.len > i+1) common::error("Too many tokens in instruction arg");
+
+  switch (arg_tok[i].type)
+  {
+    case NUMBER:
+      if (deref)
+      {
+        arg.type = PTR;
+        arg.data.as_PTR = arg_tok[i].lexme.to_ulong()!;
+      }
+      else
+      {
+        arg.type = NUM;
+        io::printfn("checking size of InstTok: %s", inst);
+        @eachif(inst.width; $size)
+        {
+          io::printfn("InstTok size was %s, type %s", $size, $evaltype(ArgData.$eval("as_NUM_" +++ $size.nameof).typeid.nameof).nameof);
+          arg.size = $size;
+          arg.data.$eval("as_NUM_" +++ $size.nameof) = ($evaltype(ArgData.$eval("as_NUM_" +++ $size.nameof).typeid.nameof))arg_tok[i].lexme.to_ulong()!;
+        };
+      }
+    case REGISTER:
+      if (deref)
+      {
+        arg.type = REGPTR;
+        arg.data.as_REGPTR = (char)(lexer::REG_NAMES[..].index_of(arg_tok[i].lexme)!);
+      }
+      else
+      {
+        arg.type = REG;
+        arg.data.as_REG = (char)(lexer::REG_NAMES[..].index_of(arg_tok[i].lexme)!);
+      }
+    case LABEL:
+      if (deref)
+      {
+        arg.type = LABEL_DEREF;
+        arg.data.as_LABEL_DEREF = arg_tok[i].lexme;
+      }
+      else
+      {
+        arg.type = LABEL;
+        arg.data.as_LABEL = arg_tok[i].lexme;
+      }
+    default:
+      common::error("Unhandled token type: %s", arg_tok[i].type);
+  }
+  
+
+  return arg;
+}
+
 /*
 fn void validate_gen(List(<char>)* generated, Tokens lexed) // TODO: FIX
 {
