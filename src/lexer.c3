@@ -1,6 +1,7 @@
 module lexer;
 
 import common;
+import logger;
 
 import std::io;
 import std::collections::list;
@@ -74,7 +75,7 @@ List(<String>) labels;
 
 fn bool! check_valid_instruction(String data)
 {
-  io::printfn("checking inst: '%s'", data);
+  logger::debug("checking inst: '%s'", data);
   $foreach ($instruction : InstructionType.values)
     if (data.len >= $instruction.name.len && data[0:$instruction.name.len] == $instruction.name)
     {
@@ -157,7 +158,7 @@ fn Prog! lex(char[] to_lex)
     {
    /*   if (curr_tok.len() != 0)
       {
-        common::error("found string in the middle of token");
+        logger::error("found string in the middle of token");
       }
       else */if (!in_string)
       {
@@ -178,10 +179,10 @@ fn Prog! lex(char[] to_lex)
     }
     else if (ch == '\'')
     {
-      if (curr_tok.len() != 0) common::error("Found char in the middle of token");
+      if (curr_tok.len() != 0) logger::error("Found char in the middle of token");
       ch = to_lex[++i];
       expr.push( { String{ch}.copy(), CHAR } );
-      if (to_lex[++i] != '\'') common::error("Error on char");
+      if (to_lex[++i] != '\'') logger::error("Error on char");
       continue;
     }
 
@@ -230,7 +231,7 @@ fn Prog! lex(char[] to_lex)
       }
       else
       {
-        common::error("Unsupported data: '%s'", curr_tok.str_view());
+        logger::error("Unsupported data: '%s'", curr_tok.str_view());
       }
       expr.push({ curr_tok.copy_str(), t });
       curr_tok.clear();
@@ -241,8 +242,8 @@ fn Prog! lex(char[] to_lex)
 
      if (EOEXPR.contains_char(ch) && ((expr.len() > 1 && expr[0].type == LABEL_DECL) || (expr.len() > 0 && expr[0].type == INSTRUCTION)))
      {
-       io::printfn("expr is: %s", expr);
-       io::printfn("eoexpr was: '%c' '%d'", ch, ch);
+       logger::debug("expr is: %s", expr);
+       logger::debug("eoexpr was: '%c' '%d'", ch, ch);
        lexed.push(expr);
        expr = {};
      }

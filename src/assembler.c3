@@ -2,6 +2,7 @@ module assembler;
 
 import common;
 import lexer;
+import logger;
 
 import std::io;
 import std::collections::list;
@@ -99,8 +100,8 @@ macro usz InstTok.@get_arg_size(&self, #arg)
 fn Bytes InstTok.to_bytes(&self, LProg* prog, usz own_idx)
 {
   Bytes b = Bytes.new();
-  b.add_array(common::to_bytes(W16, (InstSize)self.to_instruction()));
-  common::error("TODO");
+  b.add_array(common::to_bytes(W16, @as(InstSize, self.to_instruction())));
+  logger::error("TODO");
 //  return b;
 }
 
@@ -120,7 +121,7 @@ fn usz InstTok.resolve_label(&self, LProg* prog, String name)
       return i.byte_offset(prog , idx);
     }
   }
-  common::error("Label %s does not exist", name);
+  logger::error("Label %s does not exist", name);
 }
 
 macro @eachif(value, $Enum = void, #attribute = null; @body($matching_value))
@@ -135,10 +136,10 @@ macro @eachif(value, $Enum = void, #attribute = null; @body($matching_value))
     $else
       $val_at = $value.#attribute;
     $endif
-//    io::printfn("comparing c:%s to r:%s", $val_at, value);
+//    logger::debug("comparing c:%s to r:%s", $val_at, value);
     if ($val_at == value)
     {
-//      io::printfn("c:%s and r:%s match", $val_at, value);
+//      logger::debug("c:%s and r:%s match", $val_at, value);
       @body($value);
       return;
     }
@@ -182,34 +183,36 @@ fn int main(String[] args) @if($feature(ASSEMBLER))
 {
   if (args.len != 3)
   {
-    io::eprintn("must pass input file name and output file name");
+    logger::info("must pass input file name and output file name");
     return 1;
   }
   char[] file_data = file::load_new(args[1])!!;
   File out_file = file::open(args[2], "wb")!!;
 
   usz data_ptr = 0;
-  io::printfn("Assembling:\n---------\n%s\n---------", (String)file_data);
+  logger::debug("Assembling:\n---------\n%s\n---------", (String)file_data);
   Prog! lexed = lexer::lex(file_data);
   if (catch err = lexed)
   {
-    common::error("Error while lexing tokens: %s", err);
+    logger::error("Error while lexing tokens: %s", err);
   }
 
-  io::printfn("lexed: %s", lexed);
+  logger::debug("lexed: %s", lexed);
 
   LProg prog = build(lexed);
-  io::printfn("built: %s", prog);
+  logger::debug("built: %s", prog);
 
   Bytes generated = Bytes.new();
   foreach (i, tok : prog) generated.add_all(&&tok.to_bytes(&prog, i));
 
-  io::printn("generated: ");
-  foreach (ch : generated)
-  {
-    io::print(ch);
-  }
-  io::printn();
+  $if $feature(DEBUG):
+    logger::debug("generated:");
+    foreach (ch : generated)
+    {
+      io::print(ch);
+    }
+    io::printn();
+  $endif
 /*
   List(<char>) data;
   data.new_init();
@@ -233,7 +236,7 @@ fn int main(String[] args) @if($feature(ASSEMBLER))
 
 fn LProg build(Prog lexed)
 {
-io::printfn("building %s", lexed);
+  logger::debug("building %s", lexed);
   LProg prog;
 
   foreach (expr : lexed)
@@ -241,7 +244,7 @@ io::printfn("building %s", lexed);
     InstTok! tok = build_expr(expr);
     if (catch err = tok)
     {
-      common::error("error in expression '%s': %s", expr, err);
+      logger::error("error in expression '%s': %s", expr, err);
     }
     prog.push(tok);
   }
@@ -257,7 +260,7 @@ fault ExprError
 
 fn InstTok! build_expr(Expr expr)
 {
-  io::printfn("building expr: %s", expr);
+  logger::debug("building expr: %s", expr);
   InstTok tok;
 
   usz i = 0;
@@ -282,12 +285,12 @@ fn InstTok! build_expr(Expr expr)
   {
     tok.type = $inst_type;
   }!;*/
-  io::printfn("token type: %s", tok.type);
+  logger::debug("token type: %s", tok.type);
 
   if (has_size)
   {
     tok.width = @enum_from_value(BitWidth, name, expr[i].lexme[idx+2..])!;
-    io::printfn("token size: %s", tok.width);
+    logger::debug("token size: %s", tok.width);
   }
 
   if (tok.type.args > 0)
@@ -314,7 +317,7 @@ fn InstTok! build_expr(Expr expr)
         }
         else
         {
-          common::error("Instruction has more than two arguments");
+          logger::error("Instruction has more than two arguments");
         }
         set_args ++;
       }
@@ -329,7 +332,7 @@ fn InstTok! build_expr(Expr expr)
 fn Arg! build_arg(InstTok inst, Token[] arg_tok)
 {
   Arg arg;
-  io::printfn("building arg: %s", arg_tok);
+  logger::debug("building arg: %s", arg_tok);
 
   bool deref = false;
 
@@ -341,7 +344,7 @@ fn Arg! build_arg(InstTok inst, Token[] arg_tok)
     i = 1;
   }
 
-  if (arg_tok.len > i+1) common::error("Too many tokens in instruction arg");
+  if (arg_tok.len > i+1) logger::error("Too many tokens in instruction arg");
 
   switch (arg_tok[i].type)
   {
@@ -354,24 +357,24 @@ fn Arg! build_arg(InstTok inst, Token[] arg_tok)
       else
       {
         arg.type = NUM;
-        io::printfn("checking size of InstTok: %s", inst);
+        logger::debug("checking size of InstTok: %s", inst);
         @eachif(inst.width; $size)
         {
-          io::printfn("InstTok size was %s, type %s", $size, $evaltype(ArgData.$eval("as_NUM_" +++ $size.nameof).typeid.nameof).nameof);
+          logger::debug("InstTok size was %s, type %s", $size, $typefrom(ArgData.$eval("as_NUM_" +++ $size.nameof).typeid).nameof);
           arg.size = $size;
-          arg.data.$eval("as_NUM_" +++ $size.nameof) = ($evaltype(ArgData.$eval("as_NUM_" +++ $size.nameof).typeid.nameof))arg_tok[i].lexme.to_ulong()!;
+          arg.data.$eval("as_NUM_" +++ $size.nameof) = @as($typefrom(ArgData.$eval("as_NUM_" +++ $size.nameof).typeid), arg_tok[i].lexme.to_ulong()!);
         };
       }
     case REGISTER:
       if (deref)
       {
         arg.type = REGPTR;
-        arg.data.as_REGPTR = (char)(lexer::REG_NAMES[..].index_of(arg_tok[i].lexme)!);
+        arg.data.as_REGPTR = @as(char, lexer::REG_NAMES[..].index_of(arg_tok[i].lexme)!);
       }
       else
       {
         arg.type = REG;
-        arg.data.as_REG = (char)(lexer::REG_NAMES[..].index_of(arg_tok[i].lexme)!);
+        arg.data.as_REG = @as(char, lexer::REG_NAMES[..].index_of(arg_tok[i].lexme)!);
       }
     case LABEL:
       if (deref)
@@ -385,7 +388,7 @@ fn Arg! build_arg(InstTok inst, Token[] arg_tok)
         arg.data.as_LABEL = arg_tok[i].lexme;
       }
     default:
-      common::error("Unhandled token type: %s", arg_tok[i].type);
+      logger::error("Unhandled token type: %s", arg_tok[i].type);
   }
   
 
@@ -412,7 +415,7 @@ fn void validate_gen(List(<char>)* generated, Tokens lexed) // TODO: FIX
       }
       if (catch err = validate_sequence(generated, sequence))
       {
-        common::error("Error while parsing tokens '%s': %s", sequence.array_view(), err);
+        logger::error("Error while parsing tokens '%s': %s", sequence.array_view(), err);
       }
       sequence.clear();
     }
@@ -423,7 +426,7 @@ fn void validate_gen(List(<char>)* generated, Tokens lexed) // TODO: FIX
     }
     else
     {
-      common::error("I probably did something stupid %s", lexed[i].type);
+      logger::error("I probably did something stupid %s", lexed[i].type);
     }
   }
 }
@@ -560,7 +563,7 @@ fn Instruction! build_instruction(InstT_And_Width type, List(<Tokens>) args)
           op_type = PTR;
           inst.jif_rel = true;
         default:
-          common::error("Unsupported deref: %s", arg[1].type);
+          logger::error("Unsupported deref: %s", arg[1].type);
       }
     }
     else
@@ -577,7 +580,7 @@ fn Instruction! build_instruction(InstT_And_Width type, List(<Tokens>) args)
           inst.jif_rel = true;
 
         default:
-          common::error("Unsupported type: %s", arg[0].type);
+          logger::error("Unsupported type: %s", arg[0].type);
       }
     }
     if (i == 0)
@@ -624,7 +627,7 @@ fn void! build_arguments(List(<char>)* args_ch, InstT_And_Width inst_type, List(
         }
         else
         {
-           common::error("label does not exist: %s", args[0][0].lexme);
+           logger::error("label does not exist: %s", args[0][0].lexme);
         }*/
         io::printfn("label offset is %d", (isz)lexer::labels.get(args[0][0].lexme)!! - args_ch.len());
 
@@ -639,7 +642,7 @@ io::printn();
         args_ch.add_array(common::to_bytes(W64, (isz)lexer::labels.get(args[0][0].lexme)!! - args_ch.len()));
 
       default:
-        common::error("no");
+        logger::error("no");
     }
   }
   else
@@ -686,7 +689,7 @@ io::printn();
           case LABEL_DECL:
             lexer::labels.set(tok.lexme[..tok.lexme.len - 2], args_ch.len() + 1);
           default:
-            common::error("Unhandled token type: %s (%s)", tok.type, tok.lexme);
+            logger::error("Unhandled token type: %s (%s)", tok.type, tok.lexme);
         }
       }
     }

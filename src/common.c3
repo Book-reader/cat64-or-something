@@ -27,6 +27,7 @@ bitstruct Instruction : InstSize @overlap
     Condition jif_cond : 7..8;
     OpType src_type : 7..9;
     OpType dst_type : 10..12;
+
 //    Condition cond : 11..13;
     OffsetKind offset_kind : 12..13;
     
@@ -75,7 +76,6 @@ enum OpType : char
     NUM,
     REG,
     REGPTR,
-    LABEL,
 }
 
 
@@ -104,18 +104,18 @@ fn USize to_usize(BitWidth src_width, char[] src)
         case W8:
             return src[0];
         case W16:
-            return *(USize*)(char*)char[]{src[1], src[0], 0, 0, 0, 0, 0, 0};
+            return *@as(USize*, @as(char*, char[]{src[1], src[0], 0, 0, 0, 0, 0, 0}));
         case W32:
-            return *(USize*)(char*)char[]{src[3], src[2], src[1], src[0], 0, 0, 0, 0};
+            return *@as(USize*, @as(char*, char[]{src[3], src[2], src[1], src[0], 0, 0, 0, 0}));
         case W64:
-            return *(USize*)(char*)char[]{src[7], src[6], src[5], src[4], src[3], src[2], src[1], src[0]};
+            return *@as(USize*, @as(char*, char[]{src[7], src[6], src[5], src[4], src[3], src[2], src[1], src[0]}));
 
     }
 }
 
 macro char[] to_bytes(BitWidth dst_width, USize data, bool $alloc = false)
 {
-    char* src = (char*)&data;
+    char* src = @as(char*, &data);
     
     $if $alloc:
       char[] dst = mem::alloc_array(char, dst_width.size);
@@ -136,14 +136,4 @@ macro char[] to_bytes(BitWidth dst_width, USize data, bool $alloc = false)
     return dst;
 }
 
-macro void error(String format, ...)
-{
-    $if (env::COMPILER_SAFE_MODE):
-        unreachable(format, $vasplat);
-    $else
-        io::eprintf("ERROR: %s:%s:%s ", $$FILE, $$FUNC, $$LINE);
-        io::eprintfn(format, $vasplat);
-        thread::exit(1);
-        unreachable();
-    $endif
-}
+macro @as($Type, #expr) @builtin => ($Type)(#expr);
