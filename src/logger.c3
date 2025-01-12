@@ -11,19 +11,19 @@ macro debug(String msg, ...)
 
 macro info(String msg, ...)
 {
-    io::printf("[INFO] (%s:%s %s) ", $$FILE, $$LINE, $$FUNC);
-    io::printfn(msg, $vasplat);
+  io::printf("[INFO] (%s:%s %s) ", $$FILE, $$LINE, $$FUNC);
+  io::printfn(msg, $vasplat);
 }
 
 macro warn(String msg, ...)
 {
-    io::eprintf("[WARNING] (%s:%s %s) ", $$FILE, $$LINE, $$FUNC);
-    io::eprintfn(msg, $vasplat);
+  io::eprintf("[WARNING] (%s:%s %s) ", $$FILE, $$LINE, $$FUNC);
+  io::eprintfn(msg, $vasplat);
 }
 
 macro error(String msg, ...)
 {
-    io::eprintf("[ERROR] (%s:%s %s) ", $$FILE, $$LINE, $$FUNC);
-    io::eprintfn(msg, $vasplat);
-    unreachable();
+  io::eprintf("[ERROR] (%s:%s %s) ", $$FILE, $$LINE, $$FUNC);
+  io::eprintfn(msg, $vasplat);
+  unreachable();
 }
