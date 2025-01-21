@@ -60,6 +60,8 @@ enum InstructionType : char (String name, bool sized, char args)
   XOR = { "xor", true, 2 },
   NOR = { "nor", true, 2 },
   XNOR = { "xnor", true, 2 },
+  PUSH = { "push", true, 1 },
+  POP = { "pop", true, 1 },
 }
 
 enum BitWidth : char (char size, usz bit_size, String name)
@@ -95,6 +97,14 @@ enum OffsetKind : char
   SRC,
   DST,
   BOTH
+}
+
+fn bool OffsetKind.includes(self, OffsetKind other)
+{
+  if (self == NONE) return false;
+  if (self == other) return true;
+  if (self == BOTH) return true;
+  return false;
 }
 
 fn USize to_usize(BitWidth src_width, char[] src)
@@ -136,4 +146,6 @@ macro char[] to_bytes(BitWidth dst_width, USize data, bool $alloc = false)
   return dst;
 }
 
+
+// We have zig at home:
 macro @as($Type, #expr) @builtin => ($Type)(#expr);

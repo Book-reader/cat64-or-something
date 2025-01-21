@@ -4,6 +4,13 @@ import logger;
 
 import std::io;
 
+
+struct Memory
+{
+  char[] ram;
+}
+
+
 struct Cpu
 {
   // The address of the current instruction in memory
@@ -90,7 +97,7 @@ fn int main(String[] args) @if($feature(EMULATOR))
     cpu.inst_ptr += 2;
 
     // Execute the current instruction
-    switch (curr_inst.type)
+    switch (curr_inst.type) @jump
     {
       case MOV:
         USize src = @read(curr_inst, src_type);
@@ -127,6 +134,7 @@ fn int main(String[] args) @if($feature(EMULATOR))
           cpu.inst_ptr += (isz)common::to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
         }*/
       case PRINTC:
+        logger::debug("Printing %d %c", common::to_usize(W64, &cpu.registers[0]), common::to_usize(W64, &cpu.registers[0]));
         io::printf("%c", common::to_usize(W64, &cpu.registers[0]));
       case PRINT:
         io::printf("%s", @as(ZString, mem[common::to_usize(W64, &cpu.registers[0])..]));
@@ -179,7 +187,8 @@ fn int main(String[] args) @if($feature(EMULATOR))
           logger::debug("Condition was true");
           // TODO: use the actual instruction and set the width to 64 in the assembler
           usz old = cpu.inst_ptr;
-          cpu.inst_ptr = @read({.width = W64, .offset_kind = DST, .src_type = curr_inst.src_type, .dst_type = NUM }, dst_type);
+          logger::debug("JIF: offset_kind %s", curr_inst.offset_kind);
+          cpu.inst_ptr = @read({.width = W64, .src_type = curr_inst.src_type, .offset_kind = DST, .dst_type = NUM }, dst_type);
           logger::debug("Jumping from %s to %s", old, cpu.inst_ptr);
         }
         else
@@ -221,6 +230,20 @@ macro USize @read(Instruction inst, #type)
     default:
       logger::error("found %s", inst.#type);
   }
+
+
+  $assert($stringify(#type)[3..] == "_kind" || "That probably isn't good");
+  @pool()
+  {
+    logger::debug("maybe Jumping relativly by %s to %s or to %s", @as(isz, out), @as(isz, ptr) + @as(isz, out), out);
+    logger::debug("Offset Kind: %s, type: %s", inst.offset_kind, $stringify(#type));
+    if (inst.offset_kind.includes(@enum_from_value(OffsetKind, nameof, $stringify(#type)[:3].temp_ascii_to_upper())!!))
+    {
+      logger::debug("was relative");
+      return @as(usz, @as(isz, ptr) + @as(isz, out));
+    }
+    logger::debug("was not relative");
+  };
 
 /*  var $type = $stringify(#type);
   $switch 

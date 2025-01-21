@@ -29,9 +29,9 @@ struct InstTok(Printable)
 
 struct Arg
 {
+  inline ArgData data;
   ArgType type;
   BitWidth size;
-  ArgData data;
 }
 
 union ArgData
@@ -42,11 +42,7 @@ union ArgData
   ulong as_PTR;
   char as_REG;
   char as_REGPTR;
-
-  char as_NUM_W8;
-  ushort as_NUM_W16;
-  uint as_NUM_W32;
-  ulong as_NUM_W64;
+  ulong as_NUM;
 }
 
 enum ArgType : char (OpType op)
@@ -58,6 +54,11 @@ enum ArgType : char (OpType op)
   NONE = PTR,
   LABEL = NUM,
   LABEL_DEREF = PTR,
+}
+
+fn bool ArgType.relative(self)
+{
+  return self == LABEL || self == LABEL_DEREF;
 }
 
 fn usz InstTok.byte_offset(&self, LProg* prog, usz own_idx)
@@ -73,52 +74,145 @@ fn usz InstTok.byte_offset(&self, LProg* prog, usz own_idx)
 
 fn usz InstTok.size(&self)
 {
+// TODO: the below line causes an error, may be a bug.
+//  logger::debug("sizeof %s w:%s + d:%s + s:%s", @as(InstSize, self.to_instruction()), Instruction.sizeof, self.@get_arg_size(arg_dst), self.@get_arg_size(arg_src));
+  io::eprintfn("sizeof %.4x w:%s + d:%s + s:%s", @as(InstSize, self.to_instruction()), Instruction.sizeof, self.@get_arg_size(arg_dst), self.@get_arg_size(arg_src));
   return Instruction.sizeof + self.@get_arg_size(arg_dst) + self.@get_arg_size(arg_src); 
 }
 
 macro usz InstTok.@get_arg_size(&self, #arg)
 {
-  switch (self.#arg.type)
+  if ((self.type.args >= 1 && $stringify(#arg) == "arg_src") || (self.type.args >= 1 && $stringify(#arg) == "arg_dst"))
   {
-    case NUM:
-      return self.#arg.size.size;
+    switch (self.#arg.type)
+    {
+      case NUM:
+        return self.width.size;
+        //return self.#arg.size.size;
 /*      @eachif(self.width; $bitwidth)
-      {
-        return $bitwidth.size;
-      };*/
-    default:
-      @eachif(self.#arg.type; $type)
-      {
-        $if ($type != NUM):
-          return $sizeof(self.#arg.data.$eval("as_" +++ $type.nameof));
-        $endif
-      };
+        {
+          return $bitwidth.size;
+        };*/
+      default:
+        @eachif(self.#arg.type; $type)
+        {
+          $if ($type != NUM):
+            return $sizeof(self.#arg.$eval("as_" +++ $type.nameof));
+          $endif
+        };
+    }
   }
-  unreachable();
+  return 0;
+  //unreachable();
 }
 
 fn Bytes InstTok.to_bytes(&self, LProg* prog, usz own_idx)
 {
   Bytes b = Bytes.new();
   b.add_array(common::to_bytes(W16, @as(InstSize, self.to_instruction())));
-  logger::error("TODO");
-//  return b;
+
+  if (self.type == JIF)
+  {
+//    b.add_array(common::to_bytes(W64, self.arg_src.as_NUM));
+    $if $feature(DEBUG):
+      char[] a = common::to_bytes(W64, self.arg_src.as_NUM);
+      logger::debug("JIF Pointer");
+      io::print("[DEBUG] ");
+      foreach (ch : a)
+      {
+        io::printf("%.2x", ch);
+      }
+      io::printn();
+    $endif
+    b.add_array(common::to_bytes(W64, @as(ulong, self.resolve_label(prog, self.arg_src.as_LABEL, own_idx))));
+  }
+  else
+  {
+//    @eachif(self.arg_src.size; $size)
+//    {
+    logger::debug("Src: %h", common::to_bytes(self.arg_src.size, self.arg_src.as_NUM)[0:self.arg_src.size.size]);
+    logger::debug("Dst: %h", common::to_bytes(self.arg_dst.size, self.arg_dst.as_NUM)[0:self.arg_dst.size.size]);
+    switch (self.type.args)
+    {
+      case 2:
+        b.add_array(common::to_bytes(self.arg_src.size, self.arg_src.as_NUM)[0:self.arg_src.size.size]);
+        b.add_array(common::to_bytes(self.arg_dst.size, self.arg_dst.as_NUM)[0:self.arg_dst.size.size]);
+      case 1:
+        b.add_array(common::to_bytes(self.arg_src.size, self.arg_src.as_NUM)[0:self.arg_src.size.size]);
+      case 0:
+        break;
+      default:
+        logger::error("Unhandled arg count %s", self.type.args);
+    }
+//    };
+  }
+  
+//  logger::error("TODO");
+  return b;
 }
 
 fn Instruction InstTok.to_instruction(&self)
 {
-   Instruction inst;
+  Instruction inst;
 
-   return inst;
+  inst.real = true;
+  inst.type = self.type;
+  inst.width = self.width;
+
+  inst.src_type = self.arg_src.type.op;
+  inst.dst_type = self.arg_dst.type.op;
+
+  OffsetKind of = NONE;
+  if (self.arg_src.type.relative() && self.arg_dst.type.relative())
+  {
+    of = BOTH;
+  }
+  else if (self.arg_src.type.relative())
+  {
+    of = SRC;
+  }
+  else if (self.arg_dst.type.relative())
+  {
+    of = DST;
+  }
+  inst.offset_kind = of;
+  logger::debug("Instruction %s offset_kind %s", inst.type, inst.offset_kind);
+
+  if (self.type == JIF)
+  {
+    logger::debug("JIF: src %s, dst %s", self.arg_src.type, self.arg_dst.type);
+    logger::debug("%s", self);
+    inst.jif_cond = Condition.from_ordinal(self.arg_dst.as_NUM);
+  }
+
+/*bitstruct Instruction : InstSize @overlap
+{
+  // There can be a max of 31 instructions, 32 including 0
+  InstructionType type : 0..4;
+  BitWidth width : 5..6;
+  // 
+  Condition jif_cond : 7..8;
+  OpType src_type : 7..9;
+  OpType dst_type : 10..12;
+
+//  Condition cond : 11..13;
+  OffsetKind offset_kind : 12..13;
+  
+  bool real : 15;
+}*/
+
+
+  return inst;
 }
 
-fn usz InstTok.resolve_label(&self, LProg* prog, String name)
+fn isz InstTok.resolve_label(&self, LProg* prog, String name, usz own_idx)
 {
   foreach (idx, i : prog)
   {
     if (i.label == name)
     {
-      return i.byte_offset(prog , idx);
+      logger::debug("Label offset calculation: name %s, self %s, decl %s, diff %s, inst_size %s", name, self.byte_offset(prog, own_idx), i.byte_offset(prog, idx), i.byte_offset(prog, idx) - self.byte_offset(prog, own_idx), InstSize.sizeof);
+      return i.byte_offset(prog, idx) - self.byte_offset(prog, own_idx) - InstSize.sizeof;
     }
   }
   logger::error("Label %s does not exist", name);
@@ -129,7 +223,17 @@ macro @eachif(value, $Enum = void, #attribute = null; @body($matching_value))
   $if $Enum.typeid == void.typeid:
     $Enum = $typeof(value);
   $endif
-  $foreach ($value : $Enum.values)
+
+  return @eachif_arr(value, $Enum.values, #attribute, false; $match)
+  {
+    @body($match);
+  };
+
+}
+
+macro @eachif_arr(value, $values, #attribute = null, $failable = true; @body($matching_value))
+{
+  $foreach ($value : $values)
     var $val_at;
     $if $stringify(#attribute) == "null":
       $val_at = $value;
@@ -144,7 +248,9 @@ macro @eachif(value, $Enum = void, #attribute = null; @body($matching_value))
       return;
     }
   $endforeach
-  $if $stringify(#attribute) == "null":
+
+
+  $if $stringify(#attribute) == "null" ||| $failable:
     unreachable();
   $else
     return SearchResult.MISSING?;
@@ -161,10 +267,10 @@ fn usz! InstTok.to_format(&self, Formatter* formatter) @dynamic
       $if $width == NUM:
         @eachif(self.width; $bitwidth)
         {
-          n += formatter.printf("_%s:%s %s) ", $bitwidth, self.@get_arg_size($eval($arg)), self.$eval($arg).data.$eval("as_NUM" +++ "_" +++ $bitwidth.nameof));
+          n += formatter.printf("_%s:%s %s) ", $bitwidth, self.@get_arg_size($eval($arg)), self.$eval($arg).as_NUM);
         };
       $else
-       n += formatter.printf(":%s %s) ", self.@get_arg_size($eval($arg)), self.$eval($arg).data.$eval("as_" +++ $width.nameof));
+       n += formatter.printf(":%s %s) ", self.@get_arg_size($eval($arg)), self.$eval($arg).$eval("as_" +++ $width.nameof));
       $endif
     };
 
@@ -209,27 +315,13 @@ fn int main(String[] args) @if($feature(ASSEMBLER))
     logger::debug("generated:");
     foreach (ch : generated)
     {
-      io::print(ch);
+      io::printf("%.2x", ch);
     }
     io::printn();
   $endif
-/*
-  List(<char>) data;
-  data.new_init();
-  defer data.free();
-
-  validate_gen(&data, lexed);
-
-  io::printn("generated bytes:");
-  foreach (ch : data)
-  {
-    io::printf("%.2x", ch);
-  }
-  io::printn();
-
-  out_file.write(data.array_view())!!;
+  out_file.write(generated.array_view())!!;
   out_file.close()!!;
-*/
+
 
   return 0;
 }
@@ -352,7 +444,7 @@ fn Arg! build_arg(InstTok inst, Token[] arg_tok)
       if (deref)
       {
         arg.type = PTR;
-        arg.data.as_PTR = arg_tok[i].lexme.to_ulong()!;
+        arg.as_PTR = arg_tok[i].lexme.to_ulong()!;
       }
       else
       {
@@ -360,32 +452,32 @@ fn Arg! build_arg(InstTok inst, Token[] arg_tok)
         logger::debug("checking size of InstTok: %s", inst);
         @eachif(inst.width; $size)
         {
-          logger::debug("InstTok size was %s, type %s", $size, $typefrom(ArgData.$eval("as_NUM_" +++ $size.nameof).typeid).nameof);
+          logger::debug("InstTok size was %s", $size);
           arg.size = $size;
-          arg.data.$eval("as_NUM_" +++ $size.nameof) = @as($typefrom(ArgData.$eval("as_NUM_" +++ $size.nameof).typeid), arg_tok[i].lexme.to_ulong()!);
+          arg.as_NUM = arg_tok[i].lexme.to_ulong()!;
         };
       }
     case REGISTER:
       if (deref)
       {
         arg.type = REGPTR;
-        arg.data.as_REGPTR = @as(char, lexer::REG_NAMES[..].index_of(arg_tok[i].lexme)!);
+        arg.as_REGPTR = @as(char, lexer::REG_NAMES[..].index_of(arg_tok[i].lexme)!);
       }
       else
       {
         arg.type = REG;
-        arg.data.as_REG = @as(char, lexer::REG_NAMES[..].index_of(arg_tok[i].lexme)!);
+        arg.as_REG = @as(char, lexer::REG_NAMES[..].index_of(arg_tok[i].lexme)!);
       }
     case LABEL:
       if (deref)
       {
         arg.type = LABEL_DEREF;
-        arg.data.as_LABEL_DEREF = arg_tok[i].lexme;
+        arg.as_LABEL_DEREF = arg_tok[i].lexme;
       }
       else
       {
         arg.type = LABEL;
-        arg.data.as_LABEL = arg_tok[i].lexme;
+        arg.as_LABEL = arg_tok[i].lexme;
       }
     default:
       logger::error("Unhandled token type: %s", arg_tok[i].type);
