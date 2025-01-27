@@ -170,10 +170,10 @@ fn int main(String[] args)
     *cpu.inst_ptr += 2;
 
     // Execute the current instruction
-    switch (curr_inst.type) @jump
+    switch (curr_inst.type) /*@jump*/
     {
       case MOV:
-        switch (curr_inst.width) @jump
+        switch (curr_inst.width) /*@jump*/
         {
           case W8:
             vm_mov(curr_inst, W8);
@@ -230,7 +230,7 @@ fn int main(String[] args)
       case PRINT:
         io::printf("%s", @as(ZString, cpu.regs[0]));
       case ADD:
-        break;
+        logger::error("ADD not implemented yet");
         // TODO: make these return char[] that points to the correct place in memory so I can just do dst[:curr_inst.width.size] = src[:curr_inst.width.size];
 /*        ulong src = @read(curr_inst, src_type);
         ulong dst = @read(curr_inst, dst_type);
@@ -271,7 +271,7 @@ fn int main(String[] args)
 
         logger::debug("Jumping with condition %s", curr_inst.jif_cond);
 
-        switch (curr_inst.jif_cond) @jump
+        switch (curr_inst.jif_cond) /*@jump*/
         {
           case NE:
             logger::debug("NE: %s", !cpu.f_zero);
@@ -332,19 +332,22 @@ macro vm_mov(Instruction inst, BitWidth $width)
 
 macro @write(Instruction inst, BitWidth $width, value)
 {
-  switch (inst.dst_type) @jump
+  switch (inst.dst_type) /*@jump*/
   {
     case NUM:
       logger::error("Cannot MOV to NUM");
+    case REG:
+      defer *cpu.inst_ptr += 1;
+      cpu.regs[mem.get(*cpu.inst_ptr, 1)[0]].$eval("write_" +++ $width.nameof)(value);
+//    case REGPTR:   
     default:
       logger::error("Unimplemented: %s", inst.dst_type);
-      logger::error("Unimplemented: %s %s", inst.dst_type.ordinal, inst.dst_type);
   }
 }
 
 macro @read(Instruction inst, #arg_type, BitWidth $width)
 {
-  switch (inst.#arg_type) @jump
+  switch (inst.#arg_type) /*@jump*/
   {
     case NUM:
       defer *cpu.inst_ptr += $width.size;
