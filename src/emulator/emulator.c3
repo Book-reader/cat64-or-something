@@ -130,15 +130,7 @@ fn int main(String[] args)
   }
 
 
-  $if $feature(DEBUG):
-    logger::debug("Executing (%s b): ", prog.len);
-    io::print("[DEBUG] ");
-    foreach (c : prog)
-    {
-      io::printf("%.2x", c);
-    }
-    io::printn();
-  $endif
+  logger::debug("Executing (%s b): %h", prog.len, prog);
 
   bool running = true;
 
