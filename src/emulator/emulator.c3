@@ -49,7 +49,7 @@ fn void Register.write_W32(&self, uint data)
 
 fn void Register.write_W64(&self, ulong data)
 {
-  *self = data;
+  *self = ((Register) data).read_W64();
 }
 
 fn char Register.read_W8(self)
@@ -162,10 +162,10 @@ fn int main(String[] args)
     *cpu.inst_ptr += 2;
 
     // Execute the current instruction
-    switch (curr_inst.type) /*@jump*/
+    switch (curr_inst.type) @jump
     {
       case MOV:
-        switch (curr_inst.width) /*@jump*/
+        switch (curr_inst.width) @jump
         {
           case W8:
             vm_mov(curr_inst, W8);
@@ -263,7 +263,7 @@ fn int main(String[] args)
 
         logger::debug("Jumping with condition %s", curr_inst.jif_cond);
 
-        switch (curr_inst.jif_cond) /*@jump*/
+        switch (curr_inst.jif_cond) @jump
         {
           case NE:
             logger::debug("NE: %s", !cpu.f_zero);
@@ -324,7 +324,7 @@ macro vm_mov(Instruction inst, BitWidth $width)
 
 macro @write(Instruction inst, BitWidth $width, value)
 {
-  switch (inst.dst_type) /*@jump*/
+  switch (inst.dst_type) @jump
   {
     case NUM:
       logger::error("Cannot MOV to NUM");
@@ -339,7 +339,7 @@ macro @write(Instruction inst, BitWidth $width, value)
 
 macro @read(Instruction inst, #arg_type, BitWidth $width)
 {
-  switch (inst.#arg_type) /*@jump*/
+  switch (inst.#arg_type) @jump
   {
     case NUM:
       defer *cpu.inst_ptr += $width.size;

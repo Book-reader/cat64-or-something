@@ -7,7 +7,7 @@
 >
 > Yes, the latest, not two commits ago, the latest commit probably fixed a bug in the compiler in a feature that I rely on so you need the *latest* commit
 >
-> Especially with this latest bug in `@jump`, it silently fails at runtime due what is probably a codegen issue, it also hasn't been fixed yet so I have it disabled but once it is fixed I will enable it again
+> Especially with this latest bug in `@jump`, it silently fails at runtime in unexpected ways
 >
 > You have been noted.
 
