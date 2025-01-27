@@ -30,12 +30,54 @@ fn void Memory.set(&self, usz start, usz len, char[] new)
   self.ram[start:len] = new;
 }
 
+def Register = ulong;
+
+fn void Register.write_W8(&self, char data)
+{
+  *self = self.read_W8() | @as(usz, data);
+}
+
+fn void Register.write_W16(&self, ushort data)
+{
+  *self = self.read_W16() | @as(usz, data);
+}
+
+fn void Register.write_W32(&self, uint data)
+{
+  *self = self.read_W32() | @as(usz, data);
+}
+
+fn void Register.write_W64(&self, ulong data)
+{
+  *self = data;
+}
+
+fn char Register.read_W8(self)
+{
+  return @as(char, self & 0x00000000000000ff);
+}
+
+fn ushort Register.read_W16(self)
+{
+  return @as(ushort, self & 0x000000000000ffff);
+}
+
+fn uint Register.read_W32(self)
+{
+  return @as(uint, self & 0x00000000ffffffff);
+}
+
+fn ulong Register.read_W64(self)
+{
+  return self;
+}
+
 struct Cpu
 {
   // The address of the current instruction in memory
-  ulong* inst_ptr; // a pointer to regs[9];
-  ulong* stack_ptr; // A pointer to regs[8];
-  ulong[common::NUM_REGISTERS] regs;
+  Register* inst_ptr; // a pointer to regs[9];
+  Register* stack_ptr; // A pointer to regs[8];
+  Register[common::NUM_REGISTERS] regs;
   bool f_zero;
   // if gt
   bool f_carry;
@@ -111,9 +153,9 @@ fn int main(String[] args)
 
     // Fetch & Decode the current instruction
     $echo("FIXME: " +++ $$FILE +++ ", " +++ $$FUNC);
-    Instruction curr_inst = (Instruction)(mem.get(cpu.inst_ptr, 2).as_W16());
-    //logger::debug("%.8x", get_W32(mem[cpu.inst_ptr:4]));
-    logger::debug("%s: %.4x -> %s %s %s %s", cpu.inst_ptr, @as(InstSize, curr_inst), curr_inst.type, curr_inst.width, curr_inst.type == JIF ? curr_inst.jif_cond.nameof : curr_inst.dst_type.nameof, curr_inst.src_type);
+    Instruction curr_inst = (Instruction)(mem.get(*cpu.inst_ptr, 2).as_W16());
+    //logger::debug("%.8x", get_W32(mem[*cpu.inst_ptr:4]));
+    logger::debug("%s: %.4x -> %s %s %s %s", *cpu.inst_ptr, @as(InstSize, curr_inst), curr_inst.type, curr_inst.width, curr_inst.type == JIF ? curr_inst.jif_cond.nameof : curr_inst.dst_type.nameof, curr_inst.src_type);
 
     // Big brain error checking
     if (!curr_inst.real)
@@ -125,13 +167,12 @@ fn int main(String[] args)
 
 
     // Point at the next byte
-    cpu.inst_ptr += 2;
+    *cpu.inst_ptr += 2;
 
     // Execute the current instruction
     switch (curr_inst.type) @jump
     {
       case MOV:
-        cpu.inst_ptr += curr_inst.width.size;
         switch (curr_inst.width) @jump
         {
           case W8:
@@ -153,12 +194,12 @@ fn int main(String[] args)
             switch (curr_inst.src_type)
             {
               case NUM:
-                // io::printfn("setting register %d containing %x to %x", dst[0], @common::to_usize(W64, &cpu.registers[dst[0]]), @common::to_usize(curr_inst.width, src[0:curr_inst.width.size]));
-                cpu.registers[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = to_numeric(curr_inst.width, src)[0:curr_inst.width.size];
+                // io::printfn("setting register %d containing %x to %x", dst[0], @common::to_usize(W64, &cpu.regs[dst[0]]), @common::to_usize(curr_inst.width, src[0:curr_inst.width.size]));
+                cpu.regs[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = to_numeric(curr_inst.width, src)[0:curr_inst.width.size];
               case REG:
-                cpu.registers[dst] = cpu.registers[src];
+                cpu.regs[dst] = cpu.regs[src];
               case REGPTR:
-                cpu.registers[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = mem[src:curr_inst.width.size];
+                cpu.regs[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = mem[src:curr_inst.width.size];
               default:
                 logger::error("found %s", curr_inst.src_type);
             }
@@ -169,25 +210,25 @@ fn int main(String[] args)
         }*/
       case JMP:
         logger::error("JMP not implemented yet");
-/*        ulong old = cpu.inst_ptr;
+/*        ulong old = *cpu.inst_ptr;
         char[] new = @read({.width = W64, .src_type = curr_inst.src_type, .offset_kind = SRC, .dst_type = NUM }, dst_type);
-        cpu.inst_ptr = common::to_usize(new.len, new);
-        logger::debug("JMPing from %s to %s", old, cpu.inst_ptr);*/
+        *cpu.inst_ptr = common::to_usize(new.len, new);
+        logger::debug("JMPing from %s to %s", old, *cpu.inst_ptr);*/
         /*if (!curr_inst.jif_rel)
         {
-          cpu.inst_ptr = common::to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
+          *cpu.inst_ptr = common::to_usize(W64, mem[*cpu.inst_ptr:BitWidth.W64.size]);
         }
         else
         {
-          cpu.inst_ptr += (isz)common::to_usize(W64, mem[cpu.inst_ptr:BitWidth.W64.size]);
+          *cpu.inst_ptr += (isz)common::to_usize(W64, mem[*cpu.inst_ptr:BitWidth.W64.size]);
         }*/
       case PRINTC:
-        logger::debug("Printing %d %c", cpu.registers[0], cpu.registers[0]);
-        io::printf("%c", cpu.registers[0]);
+        logger::debug("Printing %d %c", cpu.regs[0], cpu.regs[0]);
+        io::printf("%c", cpu.regs[0]);
       case PRINTINT:
-        io::printfn("%d", cpu.registers[0]);
+        io::printfn("%d", cpu.regs[0]);
       case PRINT:
-        io::printf("%s", @as(ZString, cpu.registers[0]));
+        io::printf("%s", @as(ZString, cpu.regs[0]));
       case ADD:
         break;
         // TODO: make these return char[] that points to the correct place in memory so I can just do dst[:curr_inst.width.size] = src[:curr_inst.width.size];
@@ -202,11 +243,11 @@ fn int main(String[] args)
             switch (curr_inst.src_type)
             {
               case NUM:
-                //cpu.registers[]
+                //cpu.regs[]
                 // TODO: this probably doesn't work
-                cpu.registers[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = common::to_bytes(curr_inst.width, common::to_usize(curr_inst.width, &cpu.registers[dst]) + src)[0:curr_inst.width.size];
+                cpu.regs[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = common::to_bytes(curr_inst.width, common::to_usize(curr_inst.width, &cpu.regs[dst]) + src)[0:curr_inst.width.size];
               case REG:
-                cpu.registers[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = common::to_bytes(curr_inst.width, common::to_usize(curr_inst.width, cpu.registers[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size]) + common::to_usize(curr_inst.width, cpu.registers[src][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size]));
+                cpu.regs[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size] = common::to_bytes(curr_inst.width, common::to_usize(curr_inst.width, cpu.regs[dst][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size]) + common::to_usize(curr_inst.width, cpu.regs[src][BitWidth.W64.size - curr_inst.width.size:curr_inst.width.size]));
               default:
                 logger::error("found %s", curr_inst.dst_type);
             }
@@ -252,19 +293,19 @@ fn int main(String[] args)
         {
           logger::debug("Condition was true");
 /*          // TODO: use the actual instruction and set the width to 64 in the assembler
-          ulong old = cpu.inst_ptr;
+          ulong old = *cpu.inst_ptr;
           logger::debug("JIF: offset_kind %s", curr_inst.offset_kind);
           char[] new = @read({.width = W64, .src_type = curr_inst.src_type, .offset_kind = SRC, .dst_type = NUM }, dst_type);
-          cpu.inst_ptr = common::to_usize(new.len, new);
-          logger::debug("Jumping from %s to %s", old, cpu.inst_ptr);*/
+          *cpu.inst_ptr = common::to_usize(new.len, new);
+          logger::debug("Jumping from %s to %s", old, *cpu.inst_ptr);*/
         }
         else
         {
           logger::debug("Condition was false");
-          cpu.inst_ptr += ulong.sizeof;
+          *cpu.inst_ptr += ulong.sizeof;
         }
       case DBG:
-        foreach (i, &reg : cpu.registers)
+        foreach (i, &reg : cpu.regs)
         {
           logger::info("r%s: %s", i, reg);
         }
@@ -286,37 +327,10 @@ fn int main(String[] args)
 
 macro vm_mov(Instruction inst, BitWidth $width)
 {
-  if (inst.dst_type == REG)
-  {
-
-  }
-/*  @read(inst, dst_type, $width; char[] dst)
-  {
-    @read(inst, src_type, $width; char[] src)
-    {
-      dst[..] = src[:dst.len];
-      //mem.set(mem.get(cpu.inst_ptr, $width.size).$eval("as_" +++ $width.nameof)(), $width.size, read);
-    };
-  };*/
-/*  switch (inst.dst_type) @jump
-  {
-    case NUM:
-      logger::error("Cannot move value to NUM");
-    case PTR:
-      //@read(inst, dst_type, $width;)
-      @read(inst, dst_type, $width; char[] dst)
-      {
-        @read(inst, src_type, $width; char[] src)
-        {
-          //mem.set(mem.get(cpu.inst_ptr, $width.size).$eval("as_" +++ $width.nameof)(), $width.size, read);
-        };
-      };
-    default:
-      logger::error("Not implemented: %s", inst.dst_type);
-  }*/
+  @write(inst, $width, @read(inst, src_type, $width));
 }
 
-macro @set(Instruction inst, BitWidth $width, value)
+macro @write(Instruction inst, BitWidth $width, value)
 {
   switch (inst.dst_type) @jump
   {
@@ -324,40 +338,46 @@ macro @set(Instruction inst, BitWidth $width, value)
       logger::error("Cannot MOV to NUM");
     default:
       logger::error("Unimplemented: %s", inst.dst_type);
+      logger::error("Unimplemented: %s %s", inst.dst_type.ordinal, inst.dst_type);
   }
 }
 
-macro @read(Instruction inst, #arg_type, BitWidth $width, bool $keep_bytes = true)
+macro @read(Instruction inst, #arg_type, BitWidth $width)
 {
   switch (inst.#arg_type) @jump
   {
     case NUM:
-      //if ($stringify(#arg_type) == "dst_type") logger::error("Cannot MOV to NUM");
-      $if $keep_bytes:
-        return mem.get(cpu.inst_ptr, $width.size);
-      $else
-        return mem.get(cpu.inst_ptr, $width.size).$eval("to_" +++ $width.nameof);
-      $endif 
-    default:
-      logger::error("Not Implemented: %s", inst.dst_type);
+      defer *cpu.inst_ptr += $width.size;
+      return mem.get(*cpu.inst_ptr, $width.size).$eval("as_" +++ $width.nameof)();
+    case REG:
+      defer *cpu.inst_ptr += 1;
+      return cpu.regs[mem.get(*cpu.inst_ptr, 1)[0]].$eval("read_" +++ $width.nameof)();
+    case REGPTR:
+      defer *cpu.inst_ptr += 1;
+      return mem.get(cpu.regs[mem.get(*cpu.inst_ptr, 1)[0]], $width.size).$eval("as_" +++ $width.nameof)();
+    case PTR:
+      defer *cpu.inst_ptr += BitWidth.W64.size;
+      return mem.get(mem.get(*cpu.inst_ptr, BitWidth.W64.size).as_W64(), $width.size).$eval("as_" +++ $width.nameof)();
+//    default:
+//      logger::error("Not Implemented: %s", inst.dst_type);
   }
 }
 
 /*macro ulong @read(Instruction inst, #type)
 {
-  ulong ptr = cpu.inst_ptr;
+  ulong ptr = *cpu.inst_ptr;
   ulong out;
   switch (inst.#type)
   {
     case NUM:
       out = common::to_usize(inst.width, mem[ptr:inst.width.size]);
-      cpu.inst_ptr += inst.width.size;
+      *cpu.inst_ptr += inst.width.size;
     case REG:
       out = mem[ptr];
-      cpu.inst_ptr += 1;
+      *cpu.inst_ptr += 1;
     case REGPTR:
-      out = common::to_usize(W64, &cpu.registers[mem[ptr]]);
-      cpu.inst_ptr += 1;
+      out = common::to_usize(W64, &cpu.regs[mem[ptr]]);
+      *cpu.inst_ptr += 1;
     default:
       logger::error("found %s", inst.#type);
   }
@@ -387,5 +407,5 @@ macro @read(Instruction inst, #arg_type, BitWidth $width, bool $keep_bytes = tru
 /*
 macro void @write(Instruction inst, #type, ulong val)
 {
-  ulong prt = cpu.inst_ptr;
+  ulong prt = *cpu.inst_ptr;
 }*/
