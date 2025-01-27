@@ -12,7 +12,7 @@
   // Version using semantic versioning.
   "version": "0.1.0",
   // Sources compiled for all targets.
-  "sources": [ "src/**" ],
+  "sources": [ "src/shared/**" ],
   // Test sources compiled for all targets.
   "test-sources": [ "test/**" ],
   // C sources if the project also compiles C sources
@@ -34,14 +34,16 @@
     "emulator": {
       // Executable or library.
       "type": "executable",
-      "features": ["EMULATOR"],
+      "sources": ["src/emulator/**"],
+//      "features": ["EMULATOR"],
       // Additional libraries, sources
       // and overrides of global settings here.
     },
     "assembler": {
       // Executable or library.
       "type": "executable",
-      "features": ["ASSEMBLER"],
+      "sources": [ "src/assembler/**" ],
+//      "features": ["ASSEMBLER"],
       // Additional libraries, sources
       // and overrides of global settings here.
     },

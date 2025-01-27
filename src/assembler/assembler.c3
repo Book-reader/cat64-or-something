@@ -218,45 +218,6 @@ fn isz InstTok.resolve_label(&self, LProg* prog, String name, usz own_idx)
   logger::error("Label %s does not exist", name);
 }
 
-macro @eachif(value, $Enum = void, #attribute = null; @body($matching_value))
-{
-  $if $Enum.typeid == void.typeid:
-    $Enum = $typeof(value);
-  $endif
-
-  return @eachif_arr(value, $Enum.values, #attribute, false; $match)
-  {
-    @body($match);
-  };
-
-}
-
-macro @eachif_arr(value, $values, #attribute = null, $failable = true; @body($matching_value))
-{
-  $foreach ($value : $values)
-    var $val_at;
-    $if $stringify(#attribute) == "null":
-      $val_at = $value;
-    $else
-      $val_at = $value.#attribute;
-    $endif
-//    logger::debug("comparing c:%s to r:%s", $val_at, value);
-    if ($val_at == value)
-    {
-//      logger::debug("c:%s and r:%s match", $val_at, value);
-      @body($value);
-      return;
-    }
-  $endforeach
-
-
-  $if $stringify(#attribute) == "null" ||| $failable:
-    unreachable();
-  $else
-    return SearchResult.MISSING?;
-  $endif
-}
-
 fn usz! InstTok.to_format(&self, Formatter* formatter) @dynamic
 {
   usz! n = formatter.printf("%s.%s:[ ", self.type, self.width);
@@ -285,7 +246,7 @@ fn usz! InstTok.to_format(&self, Formatter* formatter) @dynamic
   return n; 
 }
 
-fn int main(String[] args) @if($feature(ASSEMBLER))
+fn int main(String[] args)
 {
   if (args.len != 3)
   {
@@ -547,7 +508,7 @@ fn InstT_And_Width! validate_instruction(Token tok)
     {
       return {$instruction, W8};
     }
-    USize size = tok.lexme[$instruction.name.len+1..].to_int()!;
+    ulong size = tok.lexme[$instruction.name.len+1..].to_int()!;
 
     BitWidth width;
     switch (size)

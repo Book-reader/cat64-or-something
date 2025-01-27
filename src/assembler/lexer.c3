@@ -39,7 +39,7 @@ const String[BitWidth.elements] VALID_SUFFIXES = {"8", "16", "32", "64"};
 
 $assert(VALID_SUFFIXES[0] == BitWidth.W8.name);
 
-const String[common::NUM_REGISTERS] REG_NAMES = {"r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7"};
+const String[common::NUM_REGISTERS] REG_NAMES = {"r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "rsp", "esp"};
 
 const char COMMENT = '#';
 
@@ -77,10 +77,13 @@ fn bool! check_valid_instruction(String data)
 {
   logger::debug("checking inst: '%s'", data);
   $foreach ($instruction : InstructionType.values)
+//    logger::debug("%s:%s %s:%s", data, data.len, $instruction.name, $instruction.name.len);
     if (data.len >= $instruction.name.len && data[0:$instruction.name.len] == $instruction.name)
     {
+//      logger::debug("a");
       if ($instruction.sized == false)
       {
+//        logger::debug("b");
         if (data.len == $instruction.name.len) return true;
         return InstructionFault.SIZE_IN_UNSIZED_INSTRUCTION?;
       }
@@ -89,6 +92,7 @@ fn bool! check_valid_instruction(String data)
       return InstructionFault.NO_SIZE_IN_SIZED_INSTRUCTION?;
     }
   $endforeach
+  logger::debug("Not instruction :(");
   return false;
 }
 

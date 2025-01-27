@@ -21,9 +21,9 @@ macro warn(String msg, ...)
   io::eprintfn(msg, $vasplat);
 }
 
-macro error(String msg, ...)
+macro error(String msg = "(No Messsage)", ...)
 {
   io::eprintf("[ERROR] (%s:%s %s) ", $$FILE, $$LINE, $$FUNC);
   io::eprintfn(msg, $vasplat);
-  unreachable();
+  abort();
 }
