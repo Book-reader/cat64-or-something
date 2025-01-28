@@ -31,7 +31,8 @@ bitstruct Instruction : InstSize @overlap
   OpType dst_type : 10..12;
 
 //  Condition cond : 11..13;
-  OffsetKind offset_kind : 13..14;
+  bool src_type_rel : 13;
+  bool dst_type_rel : 14;
   
   bool real : 15;
 }
@@ -95,22 +96,6 @@ enum Condition : char
   LE,
 }
 
-enum OffsetKind : char
-{
-  NONE,
-  SRC,
-  DST,
-  BOTH
-}
-
-fn bool OffsetKind.includes(self, OffsetKind other)
-{
-  if (self == NONE) return false;
-  if (self == other) return true;
-  if (self == BOTH) return true;
-  return false;
-}
-
 /*fn ulong char[].as_W64(self)
 {
   char* data = self;
@@ -140,7 +125,7 @@ fn ulong char[].as_W64(self) => *@as(ulong*, @as(char*, char[]{self[0], self[1],
 
 macro void char[].set(self, BitWidth $width, val)
 {
-  @profile("char[].set_" +++ $width.nameof) {self.$eval("set_" +++ $width.nameof)();};
+  @profile("char[].set_" +++ $width.nameof) {self.$eval("set_" +++ $width.nameof)(val);};
 }
 
 fn void char[].set_W8(self, char val) => self[0] = val;

@@ -8,6 +8,6 @@ loop:
   add.64 r1, 1;
   cmp.8 [r0], 0
   jif 01, loop
-
+dbg
 exit
 # idx: db.8 0xff

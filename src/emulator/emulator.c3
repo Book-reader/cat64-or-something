@@ -390,18 +390,26 @@ macro vm_cmp(Instruction inst, BitWidth $width)
 macro usz @write(Instruction inst, BitWidth $width, value) @nodiscard
 {
   logger::debug("Writing %s (0x%x)", value, value);
-  switch (inst.dst_type) @jump
+  if (!inst.dst_type_rel)
   {
-    case NUM:
-      logger::error("Cannot MOV to NUM");
-    case REG:
-      logger::debug("to REG %s (%s) ", common::REG_NAMES[mem.get(*cpu.inst_ptr, 1).get(W8)], mem.get(*cpu.inst_ptr, 1).get(W8));
-      cpu.regs[mem.get(*cpu.inst_ptr, 1).get(W8)].write($width, value);
-      return 1;
-//    case REGPTR:
-    default:
-      logger::error("Unimplemented: %s", inst.dst_type);
+    switch (inst.dst_type) @jump
+    {
+      case NUM:
+        logger::error("Cannot MOV to NUM");
+      case REG:
+        logger::debug("to REG %s (%s) ", common::REG_NAMES[mem.get(*cpu.inst_ptr, 1).get(W8)], mem.get(*cpu.inst_ptr, 1).get(W8));
+        cpu.regs[mem.get(*cpu.inst_ptr, 1).get(W8)].write($width, value);
+        return 1;
+//      case REGPTR:
+      default:
+        logger::error("Unimplemented: %s", inst.dst_type);
+    }
   }
+  else
+  {
+    logger::error("Relative @write is not implemented yet");
+  }
+
 }
 
 macro ReadResult @read(Instruction inst, ulong offset, #arg_type, BitWidth $width)
@@ -409,19 +417,41 @@ macro ReadResult @read(Instruction inst, ulong offset, #arg_type, BitWidth $widt
   logger::debug("@read: %s", inst.#arg_type);
   logger::debug("mem at inst_ptr: %h %s", mem.get(*cpu.inst_ptr, 10), mem.get(*cpu.inst_ptr, 10));
   ulong addr =  *cpu.inst_ptr + offset;
-  switch (inst.#arg_type) @jump
+  if (!inst.$eval($stringify(#arg_type) +++ "_rel"))
   {
-    case NUM:
-//      logger::debug("NUM: nearby memory: %s, number: %x", mem.get(addr, 10), mem.get(addr, $width.size).get($width));
-      return ReadResult.new($width, $width.size, mem.get(addr, $width.size).get($width));
-    case REG:
-      logger::debug("REG contains %.16x", cpu.regs[mem.get(addr, 1).as_W8()]);
-      return ReadResult.new($width, 1, cpu.regs[mem.get(addr, 1).as_W8()].read($width));
-    case REGPTR:
-      return ReadResult.new($width, 1, mem.get(cpu.regs[mem.get(addr, 1).as_W8()], $width.size).get($width));
-    case PTR:
-      return ReadResult.new($width, BitWidth.W64.size, mem.get(mem.get(addr, BitWidth.W64.size).as_W64(), $width.size).get($width));
-//    default:
-//      logger::error("Not Implemented: %s", inst.dst_type);
+    switch (inst.#arg_type) @jump
+    {
+      case NUM:
+//        logger::debug("NUM: nearby memory: %s, number: %x", mem.get(addr, 10), mem.get(addr, $width.size).get($width));
+        return ReadResult.new($width, $width.size, mem.get(addr, $width.size).get($width));
+      case REG:
+        logger::debug("REG contains %.16x", cpu.regs[mem.get(addr, 1).as_W8()]);
+        return ReadResult.new($width, 1, cpu.regs[mem.get(addr, 1).as_W8()].read($width));
+      case REGPTR:
+        return ReadResult.new($width, 1, mem.get(cpu.regs[mem.get(addr, 1).as_W8()], $width.size).get($width));
+      case PTR:
+        return ReadResult.new($width, BitWidth.W64.size, mem.get(mem.get(addr, BitWidth.W64.size).as_W64(), $width.size).get($width));
+//      default:
+//        logger::error("Not Implemented: %s", inst.dst_type);
+    }
+  }
+  else
+  {
+    //logger::error("Relative @read is not implemented yet");
+    switch (inst.#arg_type) @jump
+    {
+      case NUM:
+        $if $width == W64:
+          return ReadResult.new($width, $width.size, @as(long, *cpu.inst_ptr) + @as(long, mem.get(addr, $width.size).get($width)));
+        $else
+          logger::error("Can only read a 64 bit number relatively");
+        $endif
+      case PTR:
+        return ReadResult.new($width, BitWidth.W64.size, mem.get(@as(long, *cpu.inst_ptr) + @as(long, mem.get(addr, BitWidth.W64.size).as_W64()), $width.size).get($width));
+      case REGPTR:
+        return ReadResult.new($width, 1, mem.get(@as(long, *cpu.inst_ptr) + @as(long, cpu.regs[mem.get(addr, 1).as_W8()]), $width.size).get($width));
+      default:
+        logger::error("Cannot read %s relatively (yet)", inst.#arg_type);
+    }
   }
 }

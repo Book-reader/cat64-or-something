@@ -18,6 +18,23 @@ macro Bytes Bytes.new(...) @operator(construct)
   return b;
 }
 
+macro char[] to_bytes(BitWidth width, data)
+{
+  char[] buf = mem::new_array(char, width.size);
+  switch (width) @jump
+  {
+    case W8:
+      buf.set(W8, (char)data);
+    case W16:
+      buf.set(W16, (ushort)data);
+    case W32:
+      buf.set(W32, (uint)data);
+    case W64:
+      buf.set(W64, (ulong)data);
+  }
+  return buf;
+}
+
 struct InstTok(Printable)
 {
   InstructionType type;
@@ -109,13 +126,13 @@ macro usz InstTok.@get_arg_size(&self, #arg)
 fn Bytes InstTok.to_bytes(&self, LProg* prog, usz own_idx)
 {
   Bytes b = Bytes.new();
-  b.add_array(common::to_bytes(W16, @as(InstSize, self.to_instruction())));
+  b.add_array(to_bytes(W16, @as(InstSize, self.to_instruction())));
 
   if (self.type == JIF)
   {
-//    b.add_array(common::to_bytes(W64, self.arg_src.as_NUM));
+//    b.add_array(to_bytes(W64, self.arg_src.as_NUM));
     $if $feature(DEBUG):
-      char[] a = common::to_bytes(W64, self.arg_src.as_NUM);
+      char[] a = to_bytes(W64, self.arg_src.as_NUM);
       logger::debug("JIF Pointer");
       io::print("[DEBUG] ");
       foreach (ch : a)
@@ -124,21 +141,21 @@ fn Bytes InstTok.to_bytes(&self, LProg* prog, usz own_idx)
       }
       io::printn();
     $endif
-    b.add_array(common::to_bytes(W64, @as(ulong, self.resolve_label(prog, self.arg_src.as_LABEL, own_idx))));
+    b.add_array(to_bytes(W64, @as(ulong, self.resolve_label(prog, self.arg_src.as_LABEL, own_idx))));
   }
   else
   {
 //    @eachif(self.arg_src.size; $size)
 //    {
-    logger::debug("Src: %h", common::to_bytes(self.arg_src.size, self.arg_src.as_NUM)[0:self.arg_src.size.size]);
-    logger::debug("Dst: %h", common::to_bytes(self.arg_dst.size, self.arg_dst.as_NUM)[0:self.arg_dst.size.size]);
+    logger::debug("Src: %h", to_bytes(self.arg_src.size, self.arg_src.as_NUM)[0:self.arg_src.size.size]);
+    logger::debug("Dst: %h", to_bytes(self.arg_dst.size, self.arg_dst.as_NUM)[0:self.arg_dst.size.size]);
     switch (self.type.args)
     {
       case 2:
-        b.add_array(common::to_bytes(self.arg_src.size, self.arg_src.as_NUM)[0:self.arg_src.size.size]);
-        b.add_array(common::to_bytes(self.arg_dst.size, self.arg_dst.as_NUM)[0:self.arg_dst.size.size]);
+        b.add_array(to_bytes(self.arg_src.size, self.arg_src.as_NUM)[0:self.arg_src.size.size]);
+        b.add_array(to_bytes(self.arg_dst.size, self.arg_dst.as_NUM)[0:self.arg_dst.size.size]);
       case 1:
-        b.add_array(common::to_bytes(self.arg_src.size, self.arg_src.as_NUM)[0:self.arg_src.size.size]);
+        b.add_array(to_bytes(self.arg_src.size, self.arg_src.as_NUM)[0:self.arg_src.size.size]);
       case 0:
         break;
       default:
@@ -162,21 +179,20 @@ fn Instruction InstTok.to_instruction(&self)
   inst.src_type = self.arg_src.type.op;
   inst.dst_type = self.arg_dst.type.op;
 
-  OffsetKind of = NONE;
-  if (self.arg_src.type.relative() && self.arg_dst.type.relative())
+  if (self.arg_src.type.relative())
   {
-    of = BOTH;
+    inst.src_type_rel = true;
   }
-  else if (self.arg_src.type.relative())
+  if (self.arg_dst.type.relative())
   {
-    of = SRC;
+    inst.dst_type_rel = true;
   }
-  else if (self.arg_dst.type.relative())
+  if (self.type == JIF)
   {
-    of = DST;
+    inst.dst_type_rel = inst.src_type_rel ;
+    inst.src_type_rel = false;
   }
-  inst.offset_kind = of;
-  logger::debug("Instruction %s offset_kind %s", inst.type, inst.offset_kind);
+  logger::debug("Instruction %s src_rel: %s dst_rel: %s", inst.type, inst.src_type_rel, inst.dst_type_rel);
 
   if (self.type == JIF)
   {
@@ -422,12 +438,12 @@ fn Arg! build_arg(InstTok inst, Token[] arg_tok)
       if (deref)
       {
         arg.type = REGPTR;
-        arg.as_REGPTR = @as(char, lexer::REG_NAMES[..].index_of(arg_tok[i].lexme)!);
+        arg.as_REGPTR = @as(char, common::REG_NAMES[..].index_of(arg_tok[i].lexme)!);
       }
       else
       {
         arg.type = REG;
-        arg.as_REG = @as(char, lexer::REG_NAMES[..].index_of(arg_tok[i].lexme)!);
+        arg.as_REG = @as(char, common::REG_NAMES[..].index_of(arg_tok[i].lexme)!);
       }
     case LABEL:
       if (deref)
@@ -672,11 +688,11 @@ fn void! build_arguments(List(<char>)* args_ch, InstT_And_Width inst_type, List(
     switch (args[0][0].type)
     {
       case NUMBER:
-        args_ch.add_array(common::to_bytes(W64, args[0][0].lexme.to_ulong()!));
+        args_ch.add_array(to_bytes(W64, args[0][0].lexme.to_ulong()!));
       case LABEL:
         /*if (lexer::labels.has_key(args[0][0].lexme))
         {
-          args_ch.add_array(common::to_bytes(W64, lexer::labels.get(args[0][0].lexme)!! - args_ch.len()));
+          args_ch.add_array(to_bytes(W64, lexer::labels.get(args[0][0].lexme)!! - args_ch.len()));
         }
         else
         {
@@ -692,7 +708,7 @@ foreach (ch : args_ch)
 io::printn();
 
         io::printfn("weufhewiufewiufhewhewiufhewifuwehfiuewhfiewhf REMEMBER TO MAKE RELATIVE (isz)lexer::labels.get(args[0][0].lexme)! - args_ch.len()");
-        args_ch.add_array(common::to_bytes(W64, (isz)lexer::labels.get(args[0][0].lexme)!! - args_ch.len()));
+        args_ch.add_array(to_bytes(W64, (isz)lexer::labels.get(args[0][0].lexme)!! - args_ch.len()));
 
       default:
         logger::error("no");
@@ -710,20 +726,20 @@ io::printn();
         switch (tok.type)
         {
           case REGISTER:
-            args_ch.add_array(common::to_bytes(W8, lexer::REG_NAMES[..].index_of(tok.lexme)!!));
+            args_ch.add_array(to_bytes(W8, common::REG_NAMES[..].index_of(tok.lexme)!!));
           case NUMBER:
             char[] result;
             io::printfn("%s", inst_type.second);
             switch (inst_type.second)
             {
               case W8:
-                result = common::to_bytes(inst_type.second, tok.lexme.to_uchar()!, true);
+                result = to_bytes(inst_type.second, tok.lexme.to_uchar()!, true);
               case W16:
-                result = common::to_bytes(inst_type.second, tok.lexme.to_ushort()!, true);
+                result = to_bytes(inst_type.second, tok.lexme.to_ushort()!, true);
               case W32:
-                result = common::to_bytes(inst_type.second, tok.lexme.to_uint()!, true);
+                result = to_bytes(inst_type.second, tok.lexme.to_uint()!, true);
               case W64:
-                result = common::to_bytes(inst_type.second, tok.lexme.to_ulong()!, true);
+                result = to_bytes(inst_type.second, tok.lexme.to_ulong()!, true);
             }
             args_ch.add_array(result);
             //for ()
@@ -738,7 +754,7 @@ io::printn();
           case LABEL:
             io::printfn("label offset is %.16x", (isz)lexer::labels.get(args[0][0].lexme)!! - args_ch.len());
             io::printfn("weufhewiufewiufhewhewiufhewifuwehfiuewhfiewhf REMEMBER TO MAKE RELATIVE (isz)lexer::labels.get(tok.lexme)! - args_ch.len()");
-            args_ch.add_array(common::to_bytes(W64, (isz)lexer::labels.get(args[0][0].lexme)!! - args_ch.len(), true));
+            args_ch.add_array(to_bytes(W64, (isz)lexer::labels.get(args[0][0].lexme)!! - args_ch.len(), true));
           case LABEL_DECL:
             lexer::labels.set(tok.lexme[..tok.lexme.len - 2], args_ch.len() + 1);
           default:
@@ -760,7 +776,7 @@ fn void! validate_sequence(List(<char>)* data, Tokens sequence)
   Instruction inst = build_instruction(inst_type, args)!;
 
   $assert(InstSize.sizeof == BitWidth.W16.size);
-  data.add_array(common::to_bytes(W16, (InstSize)inst));
+  data.add_array(to_bytes(W16, (InstSize)inst));
 
   build_arguments(data, inst_type, args)!; 
 }
