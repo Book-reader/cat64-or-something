@@ -2,12 +2,15 @@ module common;
 
 import std::io;
 import std::thread;
+import std::time;
 
 // 16 Mib of memory
 const MEM_SIZE = 0x02000000_0;
 
 // 8 General registers
 const NUM_REGISTERS = 10;
+const String[NUM_REGISTERS] REG_NAMES = {"r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "rsp", "esp"};
+
 
 $assert(usz.sizeof == 8 && "Must be 64 bit");
 
@@ -28,7 +31,7 @@ bitstruct Instruction : InstSize @overlap
   OpType dst_type : 10..12;
 
 //  Condition cond : 11..13;
-  OffsetKind offset_kind : 12..13;
+  OffsetKind offset_kind : 13..14;
   
   bool real : 15;
 }
@@ -39,7 +42,7 @@ enum InstructionType : char (String name, bool sized, char args)
   NOP = { "nop", false, 0 },
   // move PC memory address
   JMP = { "jmp", false, 1 },
-  CMP = { "cmp", true, 2 },
+  CMP = { "cmp", true, 2 }, // TODO: ICMP for signed comparison, possibly using flag so IADD/ISUB/IMUL/IDIV can also be added. this would likely require reducing the bits available to `type`
   JIF = { "jif", false, 2 }, // Only takes 1 agument in the vm, as the first argument is embedded in the instruction
   ADD = { "add", true, 2 },
   SUB = { "sub", true, 2 },
@@ -108,99 +111,62 @@ fn bool OffsetKind.includes(self, OffsetKind other)
   return false;
 }
 
-/*fn USize to_usize(BitWidth src_width, char[] src) @builtin
+/*fn ulong char[].as_W64(self)
 {
-  switch (src_width)
+  char* data = self;
+  ulong new;
+  asm
   {
-    case W8:
-      return src[0];
-    case W16:
-      return *@as(USize*, @as(char*, char[]{src[1], src[0], 0, 0, 0, 0, 0, 0}));
-    case W32:
-      return *@as(USize*, @as(char*, char[]{src[3], src[2], src[1], src[0], 0, 0, 0, 0}));
-    case W64:
-      return *@as(USize*, @as(char*, char[]{src[7], src[6], src[5], src[4], src[3], src[2], src[1], src[0]}));
-
-  }
+    movq [data], new;
+  };
+  return new;
 }*/
 
-/*macro char[] to_bytes(BitWidth dst_width, USize data, bool $alloc = false) @builtin
+macro char[].get(self, BitWidth $width)
 {
-  char* src = @as(char*, &data);
-  
-  $if $alloc:
-    char[] dst = mem::alloc_array(char, dst_width.size);
-  $else
-    char[] dst;
-  $endif
-  switch (dst_width)
-  {
-    case W8:
-      dst = char[]{src[0]};
-    case W16:
-      dst = char[]{src[1], src[0]};
-    case W32:
-      dst = char[]{src[3], src[2], src[1], src[0]};
-    case W64:
-      dst = char[]{src[7], src[6], src[5], src[4], src[3], src[2], src[1], src[0]};
-  }
-  return dst;
-}*/
-
+  @profile("char[].get_" +++ $width.nameof) {return self.$eval("as_" +++ $width.nameof)();};
+}
+// TODO: replace all these methods with `$switch` in `char[].as($width)`
 fn char char[].as_W8(self) => self[0];
 
-fn ushort char[].as_W16(self) => @as(ushort, self[1])
-                              | (@as(ushort, self[0]) << 8);
+fn ushort char[].as_W16(self) => *@as(ushort*, @as(char*, char[]{self[0], self[1], 
+                                                 0, 0, 0, 0, 0, 0}));
 
-fn uint char[].as_W32(self) => @as(uint, self[3])
-                            | (@as(uint, self[2]) << 8)
-                            | (@as(uint, self[1]) << 16)
-                            | (@as(uint, self[0]) << 24);
+fn uint char[].as_W32(self) => *@as(uint*, @as(char*, char[]{self[3], self[2], self[1],
+                                                       self[0], 0, 0, 0, 0}));
 
-fn ulong char[].as_W64(self) => @as(ulong, self[7])
-                             | (@as(ulong, self[6]) << 8)
-                             | (@as(ulong, self[5]) << 16)
-                             | (@as(ulong, self[4]) << 24)
-                             | (@as(ulong, self[3]) << 32)
-                             | (@as(ulong, self[2]) << 40)
-                             | (@as(ulong, self[1]) << 48)
-                             | (@as(ulong, self[0]) << 56);
+fn ulong char[].as_W64(self) => *@as(ulong*, @as(char*, char[]{self[0], self[1], 
+                                 self[2], self[3], self[4], self[5], self[6], self[7]}));
 
+macro void char[].set(self, BitWidth $width, val)
+{
+  @profile("char[].set_" +++ $width.nameof) {self.$eval("set_" +++ $width.nameof)();};
+}
 
 fn void char[].set_W8(self, char val) => self[0] = val;
 
 fn void char[].set_W16(self, ushort val)
 {
-  self[1] = @as(char, val);
-  self[0] = @as(char, val >> 8);
+  self[0] = @as(char, val);
+  self[1] = @as(char, val >> 8);
 }
 fn void char[].set_W32(self, uint val)
 {
-  self[3] = @as(char, val);
-  self[2] = @as(char, val >> 8);
-  self[1] = @as(char, val >> 16);
-  self[0] = @as(char, val >> 24);
+  self[0] = @as(char, val);
+  self[1] = @as(char, val >> 8);
+  self[2] = @as(char, val >> 16);
+  self[3] = @as(char, val >> 24);
 }
 fn void char[].set_W64(self, ulong val)
 {
-  self[7] = @as(char, val);
-  self[6] = @as(char, val >> 8);
-  self[5] = @as(char, val >> 16);
-  self[4] = @as(char, val >> 24);
-  self[3] = @as(char, val >> 32);
-  self[2] = @as(char, val >> 40);
-  self[1] = @as(char, val >> 48);
-  self[0] = @as(char, val >> 56);
-}
-
-macro to_numeric(BitWidth $src_width, char[] src) @builtin
-{
-  $switch ($src_width)
-//    $case W8:
-//      return 1;
-    $default:
-      $error("to_numeric: " +++ $src_width.nameof);
-  $endswitch
+  self[0] = @as(char, val);
+  self[1] = @as(char, val >> 8);
+  self[2] = @as(char, val >> 16);
+  self[3] = @as(char, val >> 24);
+  self[4] = @as(char, val >> 32);
+  self[5] = @as(char, val >> 40);
+  self[6] = @as(char, val >> 48);
+  self[7] = @as(char, val >> 56);
 }
 
 // We have zig at home:
@@ -243,5 +209,23 @@ macro @eachif_arr(value, $values, #attribute = null, $failable = true; @body($ma
   $else
     return SearchResult.MISSING?;
   $endif
+}
+
+usz current_bench_depth = 0;
+macro @profile(String name; @body()) @builtin
+{
+  $if $feature(BENCH):
+    current_bench_depth += 1;
+    Clock clock = clock::now();
+    defer
+    {
+      NanoDuration nano_seconds = clock.mark();
+      io::eprint("[BENCH] ");
+      for (usz i = 0; i < current_bench_depth - 1; i++) io::eprint("-");
+      io::eprintfn("> %s took %s", name, nano_seconds);
+      current_bench_depth -= 1;
+   }
+    $endif
+  @body();
 }
 

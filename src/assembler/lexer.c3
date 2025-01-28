@@ -39,8 +39,6 @@ const String[BitWidth.elements] VALID_SUFFIXES = {"8", "16", "32", "64"};
 
 $assert(VALID_SUFFIXES[0] == BitWidth.W8.name);
 
-const String[common::NUM_REGISTERS] REG_NAMES = {"r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "rsp", "esp"};
-
 const char COMMENT = '#';
 
 fn bool String[].contains(&self, String pointer)
@@ -98,7 +96,7 @@ fn bool! check_valid_instruction(String data)
 
 fn bool is_valid_register(String data)
 {
-  return REG_NAMES[..].contains(data);
+  return common::REG_NAMES[..].contains(data);
 }
 
 fn bool is_valid_number(String data)
