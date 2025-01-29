@@ -167,7 +167,7 @@ fn int main(String[] args)
   }
   else
   {
-    prog = x"e988 ff00000000000000 01 8989 01 00 0680 e488 0100000000000000 01 8288 00 00 8384 0b00000000000000 1580 0b80";
+    prog = x"e988 ff00000000000000 01 8989 01 00 0680 e488 0100000000000000 01 8288 00 00 8384 0b00000000000000 0b80";//"1580 0b80";
         // x"83a4 00 0000000000000000";//" 88e9 00000000000000ff 01 8989 01 00 8006 88e4 0000000000000001 01 8582 00 00 9083 000000000000000b 800b";
 //         x"88e9 00000000000000ff 01 8989 01 00 8006 88e4 0000000000000001 01 8c82 00 00 9483 ffffffffffffffe9 800b";
   }
@@ -231,10 +231,10 @@ fn int main(String[] args)
     // Execute the current instruction
     @profile("switch")
     {
-      switch (inst.type) @jump
+      switch (inst.type)
       {
        case MOV:
-         switch (inst.width) @jump
+         switch (inst.width)
          {
            case W8:
              vm_mov(inst, W8);
@@ -259,7 +259,7 @@ fn int main(String[] args)
        case PRINT:
          io::printf("%s", @as(ZString, cpu.regs[0]));
        case ADD:
-         switch (inst.width) @jump
+         switch (inst.width)
          {
            case W8:
              vm_add(inst, W8);
@@ -271,8 +271,21 @@ fn int main(String[] args)
               vm_add(inst, W64);
           }
 
+        case SUB:
+         switch (inst.width)
+         {
+           case W8:
+             vm_sub(inst, W8);
+            case W16:
+              vm_sub(inst, W16);
+            case W32:
+              vm_sub(inst, W32);
+            case W64:
+              vm_sub(inst, W64);
+          }
+
         case CMP:
-          switch (inst.width) @jump
+          switch (inst.width)
           {
             case W8:
               vm_cmp(inst, W8);
@@ -289,7 +302,7 @@ fn int main(String[] args)
 
           logger::debug("Jumping with condition %s", inst.jif_cond);
 
-          switch (inst.jif_cond) @jump
+          switch (inst.jif_cond)
           {
             case NE:
               logger::debug("NE: %s", !cpu.f_zero);
@@ -312,7 +325,7 @@ fn int main(String[] args)
             logger::debug("Condition was true");
             // TODO: use the actual instruction and set the width to 64 in the assembler
             ulong old = *cpu.inst_ptr;
-            logger::debug("JIF: offset_kind %s", inst.offset_kind);
+            logger::debug("JIF: dst_rel %s src_rel", inst.src_type_rel, inst.dst_type_rel);
             ulong new = @read(inst, 0, dst_type, W64).get(W64);
             logger::debug("Jumping from %s to %s", old, new);
             *cpu.inst_ptr = new;
@@ -371,6 +384,22 @@ macro vm_add(Instruction inst, BitWidth $width)
   
 }
 
+macro vm_sub(Instruction inst, BitWidth $width)
+{
+  ReadResult src = @read(inst, 0, src_type, $width);
+  ReadResult dst = @read(inst, src.diff, dst_type, $width);
+  logger::debug("subtracting %s from %s", src.get($width), dst.get($width));
+
+  (void)@write(inst, $width, @as($typefrom($width.type), dst.get($width) - src.get($width)));
+  *cpu.inst_ptr += src.diff + dst.diff;
+
+  logger::debug("inst_ptr after write %s", *cpu.inst_ptr);
+
+  logger::debug("src: %x, dst: %x", src.get($width), dst.get($width));
+  
+}
+
+
 macro vm_cmp(Instruction inst, BitWidth $width)
 {
   ReadResult src = @read(inst, 0, src_type, $width);
@@ -392,7 +421,7 @@ macro usz @write(Instruction inst, BitWidth $width, value) @nodiscard
   logger::debug("Writing %s (0x%x)", value, value);
   if (!inst.dst_type_rel)
   {
-    switch (inst.dst_type) @jump
+    switch (inst.dst_type)
     {
       case NUM:
         logger::error("Cannot MOV to NUM");
@@ -407,7 +436,7 @@ macro usz @write(Instruction inst, BitWidth $width, value) @nodiscard
   }
   else
   {
-    logger::error("Relative @write is not implemented yet");
+    logger::error("Relative @write is not implemented yet (needed for label data)");
   }
 
 }
@@ -419,7 +448,7 @@ macro ReadResult @read(Instruction inst, ulong offset, #arg_type, BitWidth $widt
   ulong addr =  *cpu.inst_ptr + offset;
   if (!inst.$eval($stringify(#arg_type) +++ "_rel"))
   {
-    switch (inst.#arg_type) @jump
+    switch (inst.#arg_type)
     {
       case NUM:
 //        logger::debug("NUM: nearby memory: %s, number: %x", mem.get(addr, 10), mem.get(addr, $width.size).get($width));
@@ -437,8 +466,10 @@ macro ReadResult @read(Instruction inst, ulong offset, #arg_type, BitWidth $widt
   }
   else
   {
+    // TODO: call @read here and add the number returned to *cpu.inst_ptr. will need a `bool $recurse = true` in @read that is set to false the second time
+    // Will still need the `$if $width != W64` check
     //logger::error("Relative @read is not implemented yet");
-    switch (inst.#arg_type) @jump
+    switch (inst.#arg_type)
     {
       case NUM:
         $if $width == W64:
@@ -450,7 +481,7 @@ macro ReadResult @read(Instruction inst, ulong offset, #arg_type, BitWidth $widt
         return ReadResult.new($width, BitWidth.W64.size, mem.get(@as(long, *cpu.inst_ptr) + @as(long, mem.get(addr, BitWidth.W64.size).as_W64()), $width.size).get($width));
       case REGPTR:
         return ReadResult.new($width, 1, mem.get(@as(long, *cpu.inst_ptr) + @as(long, cpu.regs[mem.get(addr, 1).as_W8()]), $width.size).get($width));
-      default:
+      case REG:
         logger::error("Cannot read %s relatively (yet)", inst.#arg_type);
     }
   }

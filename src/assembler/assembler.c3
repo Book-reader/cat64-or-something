@@ -73,6 +73,36 @@ enum ArgType : char (OpType op)
   LABEL_DEREF = PTR,
 }
 
+// TODO
+char[10] temp_;
+fn char[] Arg.to_bytes(self, InstTok* tok, LProg* prog, usz own_idx)
+{
+  switch (self.type)
+  {
+    case PTR:
+      temp_[:BitWidth.W64.size] = to_bytes(W64, self.as_PTR)[:BitWidth.W64.size];
+      return temp_[:BitWidth.W64.size];
+
+    case NUM:
+      temp_[:self.size.size] = to_bytes(self.size, self.as_NUM)[:self.size.size];
+      return temp_[:self.size.size];
+
+    case REG:
+    case REGPTR:
+      temp_[:1] = to_bytes(W8, self.as_REG)[:1];
+      return temp_[:1];
+
+    case LABEL:
+    case LABEL_DEREF:
+      temp_[:BitWidth.W64.size] = to_bytes(W64, @as(ulong, tok.resolve_label(prog, self.as_LABEL, own_idx)))[:BitWidth.W64.size];
+      return temp_[:BitWidth.W64.size];
+
+    case NONE:
+      break;
+  }
+  return {};
+}
+
 fn bool ArgType.relative(self)
 {
   return self == LABEL || self == LABEL_DEREF;
@@ -93,7 +123,9 @@ fn usz InstTok.size(&self)
 {
 // TODO: the below line causes an error, may be a bug.
 //  logger::debug("sizeof %s w:%s + d:%s + s:%s", @as(InstSize, self.to_instruction()), Instruction.sizeof, self.@get_arg_size(arg_dst), self.@get_arg_size(arg_src));
-  io::eprintfn("sizeof %.4x w:%s + d:%s + s:%s", @as(InstSize, self.to_instruction()), Instruction.sizeof, self.@get_arg_size(arg_dst), self.@get_arg_size(arg_src));
+  $if $feature(DEBUG):
+    io::eprintfn("[DEBUG1] sizeof %s.%s %s, %s (%.4x) w:%s + d:%s + s:%s", self.type, self.width, self.arg_dst.type, self.arg_src.type, @as(InstSize, self.to_instruction()), Instruction.sizeof, self.@get_arg_size(arg_dst), self.@get_arg_size(arg_src));
+  $endif
   return Instruction.sizeof + self.@get_arg_size(arg_dst) + self.@get_arg_size(arg_src); 
 }
 
@@ -130,6 +162,8 @@ fn Bytes InstTok.to_bytes(&self, LProg* prog, usz own_idx)
 
   if (self.type == JIF)
   {
+    self.width = W64;
+    self.arg_dst.size = W64;
 //    b.add_array(to_bytes(W64, self.arg_src.as_NUM));
     $if $feature(DEBUG):
       char[] a = to_bytes(W64, self.arg_src.as_NUM);
@@ -141,21 +175,23 @@ fn Bytes InstTok.to_bytes(&self, LProg* prog, usz own_idx)
       }
       io::printn();
     $endif
-    b.add_array(to_bytes(W64, @as(ulong, self.resolve_label(prog, self.arg_src.as_LABEL, own_idx))));
+//    self.arg_src.to_bytes()
+    logger::debug("WTF: %.16x", self.resolve_label(prog, self.arg_src.as_LABEL, own_idx));
+    b.add_array(self.arg_src.to_bytes(self, prog, own_idx));
   }
   else
   {
 //    @eachif(self.arg_src.size; $size)
 //    {
-    logger::debug("Src: %h", to_bytes(self.arg_src.size, self.arg_src.as_NUM)[0:self.arg_src.size.size]);
-    logger::debug("Dst: %h", to_bytes(self.arg_dst.size, self.arg_dst.as_NUM)[0:self.arg_dst.size.size]);
+    logger::debug("Src: %h", self.arg_src.to_bytes(self, prog, own_idx));
+    logger::debug("Dst: %h", self.arg_dst.to_bytes(self, prog, own_idx));
     switch (self.type.args)
     {
       case 2:
-        b.add_array(to_bytes(self.arg_src.size, self.arg_src.as_NUM)[0:self.arg_src.size.size]);
-        b.add_array(to_bytes(self.arg_dst.size, self.arg_dst.as_NUM)[0:self.arg_dst.size.size]);
+        b.add_array(self.arg_src.to_bytes(self, prog, own_idx));
+        b.add_array(self.arg_dst.to_bytes(self, prog, own_idx));
       case 1:
-        b.add_array(to_bytes(self.arg_src.size, self.arg_src.as_NUM)[0:self.arg_src.size.size]);
+        b.add_array(self.arg_dst.to_bytes(self, prog, own_idx));
       case 0:
         break;
       default:
@@ -189,7 +225,7 @@ fn Instruction InstTok.to_instruction(&self)
   }
   if (self.type == JIF)
   {
-    inst.dst_type_rel = inst.src_type_rel ;
+    inst.dst_type_rel = inst.src_type_rel;
     inst.src_type_rel = false;
   }
   logger::debug("Instruction %s src_rel: %s dst_rel: %s", inst.type, inst.src_type_rel, inst.dst_type_rel);
@@ -223,11 +259,11 @@ fn Instruction InstTok.to_instruction(&self)
 
 fn isz InstTok.resolve_label(&self, LProg* prog, String name, usz own_idx)
 {
-  foreach (idx, i : prog)
+  foreach (idx, &i : prog)
   {
     if (i.label == name)
     {
-      logger::debug("Label offset calculation: name %s, self %s, decl %s, diff %s, inst_size %s", name, self.byte_offset(prog, own_idx), i.byte_offset(prog, idx), i.byte_offset(prog, idx) - self.byte_offset(prog, own_idx), InstSize.sizeof);
+      logger::debug("Label offset calculation: name %s (%p), self %s, decl %s, diff %s, inst_size %s", name, (char*)name, self.byte_offset(prog, own_idx), i.byte_offset(prog, idx), i.byte_offset(prog, idx) - self.byte_offset(prog, own_idx), InstSize.sizeof);
       return i.byte_offset(prog, idx) - self.byte_offset(prog, own_idx) - InstSize.sizeof;
     }
   }
@@ -370,6 +406,7 @@ fn InstTok! build_expr(Expr expr)
     {
       if (expr[i].type == ARG_SEP || i == expr.len() - 1)
       {
+        logger::debug("Building arg between %s and %s (%s)", expr[old_i], expr[i], expr);
         Arg arg = build_arg(tok, expr.array_view()[old_i..i == expr.len()-1 ? i : i - 1])!;
         old_i = i+1;
         if (set_args >= tok.type.args)
