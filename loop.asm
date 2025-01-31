@@ -12,9 +12,9 @@ loop:
 dbg
 
 # sub.64 r2, 1
-# cmp.64 r2, 0
-jmp 0x0000000000
-# jif 01, 12
+cmp.64 r3, 0
+#jmp 0
+jif 00, 12
 
 exit
 # idx: db.8 0xff

@@ -178,7 +178,7 @@ fn Bytes InstTok.to_bytes(&self, LProg* prog, usz own_idx)
     $endif
 //    self.arg_src.to_bytes()
     logger::debug("TEST");
-    logger::debug("WTF: src: %h dst: %h", self.arg_src.to_bytes(self, prog, own_idx), self.arg_dst.to_bytes(self, prog, own_idx));
+    logger::debug("WTF: %.4x\n WTFsrc: %h dst: %h", @as(InstSize, self.to_instruction()), self.arg_src.to_bytes(self, prog, own_idx), self.arg_dst.to_bytes(self, prog, own_idx));
     b.add_array(self.arg_src.to_bytes(self, prog, own_idx));
     logger::debug("WTF2: %h", b.array_view());
   }
@@ -226,11 +226,6 @@ fn Instruction InstTok.to_instruction(&self)
   {
     inst.dst_type_rel = true;
   }
-  if (self.type == JIF)
-  {
-    inst.dst_type_rel = inst.src_type_rel;
-    inst.src_type_rel = false;
-  }
   logger::debug("Instruction %s src_rel: %s dst_rel: %s", inst.type, inst.src_type_rel, inst.dst_type_rel);
 
   if (self.type == JIF)
@@ -266,7 +261,7 @@ fn isz InstTok.resolve_label(&self, LProg* prog, String name, usz own_idx)
   {
     if (i.label == name)
     {
-      logger::debug("Label offset calculation: name %s (%p), self %s, decl %s, diff %s, inst_size %s", name, (char*)name, self.byte_offset(prog, own_idx), i.byte_offset(prog, idx), i.byte_offset(prog, idx) - self.byte_offset(prog, own_idx), InstSize.sizeof);
+      logger::debug("Label offset calculation: name %s (%p), self %d, decl %d, diff %d, inst_size %d", name, (char*)name, self.byte_offset(prog, own_idx), i.byte_offset(prog, idx), @as(isz, i.byte_offset(prog, idx) - self.byte_offset(prog, own_idx)), InstSize.sizeof);
       return i.byte_offset(prog, idx) - self.byte_offset(prog, own_idx) - InstSize.sizeof;
     }
   }

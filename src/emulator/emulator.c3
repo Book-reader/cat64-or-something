@@ -34,7 +34,7 @@ struct Memory
 
 fn void Memory.new_init(&self, usz size)
 {
-  self.ram = mem::alloc_array(char, size);
+  self.ram = mem::new_array(char, size);
 }
 
 fn void Memory.free(&self)
@@ -110,7 +110,7 @@ fn int main(String[] args)
   cpu.init();
   mem.new_init(common::MEM_SIZE);
   defer mem.free();
-  Instruction test = {.real = true, .type = JMP, .src_type = NUM};
+  Instruction test = {.real = true, .type = MOV, .width = W64, .src_type = REGPTR, .dst_type = REG};
 //{.real = true, .type = JIF, .jif_cond = NE, .width = W8, .dst_type = NUM};//{.real = true, .type = JIF, .width = W8, .src_type = NUM, .dst_type = REG};
 //{.real = true, .type = JIF, .jif_cond = NE, .offset_kind = SRC, .width = W8, .dst_type = NUM};//{.real = true, .type = MOV, .width = W64, .src_type = NUM, .dst_type = REG};
   //{.real = true, .type = JIF, .jif_cond = NE, .offset_kind = SRC, .width = W8, .src_type = PTR,.dst_type = PTR}; // {.type = CMP, .width = W8, .src_type = REGPTR, .dst_type = NUM, .offset_kind = NONE, .real = true };
@@ -133,7 +133,7 @@ fn int main(String[] args)
   }
   else
   {
-    prog = x"88e9 00000000000000ff 01 8989 01 00 88e4 0000000000000001 01 8882 00 00 8483 000000000000000b 8081 0000000000000000 800b";
+    prog = x"88e9 48031785f3ad783f 02 800b";//x"88e9 00000000000000ff 01 8989 01 00 88e4 0000000000000001 01 8882 00 00 8483 000000000000000b 8081 0000000000000000 800b";
 
         // Push test
         //x"e988 0001000000000000 08 1280 0b80";
@@ -179,8 +179,8 @@ fn int main(String[] args)
   while (running)
   {
     $if $feature(PERF):
-      if (iteration == 1000000000 - 1) running = false;
-      if (iteration % 5000000 == 0) io::printfn("CPU Cycle: %s", iteration);
+      if (iteration == 100000000 - 1) running = false; //1000000000
+//      if (iteration % 5000000 == 0) io::printfn("CPU Cycle: %s", iteration);
     $endif
     // Fetch, Decode, Execute
     // https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#fetchdecodeexecute-loop
@@ -298,10 +298,10 @@ fn int main(String[] args)
           logger::debug("Condition was true");
           // TODO: use the actual instruction and set the width to 64 in the assembler
           ulong old = *cpu.inst_ptr;
-          logger::debug("JIF: dst_rel %s src_rel", inst.src_type_rel, inst.dst_type_rel);
-          ulong new = @read(inst, 0, dst_type, W64).get(W64);
-          logger::debug("Jumping from %s to %s", old, new);
-          *cpu.inst_ptr = new;
+          logger::debug("JIF: dst_rel %s src_rel %s", inst.dst_type_rel, inst.src_type_rel);
+          ReadResult new = @read(inst, 0, src_type, W64);
+          logger::debug("Jumping from %s to %s", old, new.get(W64));
+          *cpu.inst_ptr = new.get(W64);
         }
         else
         {
@@ -403,7 +403,7 @@ fn int main(String[] args)
   }
   $if $feature(PERF):
     NanoDuration nano_seconds = clock.mark(); 
-    io::printfn("Took %s or %s ns to do %s iterations, %shz", nano_seconds, @as(long, nano_seconds), iteration, @as(double, iteration) / @as(double, nano_seconds));
+    io::printfn("Took %s or %s ns to do %s iterations, %dMhz", nano_seconds, @as(long, nano_seconds), iteration, (@as(double, iteration) /  nano_seconds.to_sec() / 1000000).round() );
   $endif
 
   return 0;
@@ -561,8 +561,8 @@ macro usz @write(Instruction inst, BitWidth $width, value) @nodiscard
 macro ReadResult @read(Instruction inst, ulong offset, #arg_type, BitWidth $width) @nodiscard
 {
   logger::debug("@read: %s", inst.#arg_type);
-  logger::debug("mem at inst_ptr: %h %s", mem.get(*cpu.inst_ptr, 10), mem.get(*cpu.inst_ptr, 10));
   ulong addr =  *cpu.inst_ptr + offset;
+  logger::debug("mem at addr (%s 0x%x): %h %s", addr, addr, mem.get(addr, 8), mem.get(addr, 8));
   if (!inst.$eval($stringify(#arg_type) +++ "_rel"))
   {
     switch (inst.#arg_type)
@@ -574,6 +574,8 @@ macro ReadResult @read(Instruction inst, ulong offset, #arg_type, BitWidth $widt
         logger::debug("REG %s (%s) contains %.16x (8: %.2x, 16: %.4x, 32: %.8x, 64: %.16x)", common::REG_NAMES[mem.get(addr, 1).get(W8)], $width, cpu.regs[mem.get(addr, 1).get(W8)], cpu.regs[mem.get(addr, 1).get(W8)].read(W8), cpu.regs[mem.get(addr, 1).get(W8)].read(W16), cpu.regs[mem.get(addr, 1).get(W8)].read(W32), cpu.regs[mem.get(addr, 1).get(W8)].read(W64));
         return ReadResult.new($width, 1, cpu.regs[mem.get(addr, 1).get(W8)].read($width));
       case REGPTR:
+        logger::debug("REGPTR %s contains %.16x pointing to %h", common::REG_NAMES[mem.get(addr, 1).get(W8)], cpu.regs[mem.get(addr, 1).get(W8)], mem.get(cpu.regs[mem.get(addr, 1).get(W8)], $width.size));
+        logger::debug("Nearby REGPTR: %h", mem.get(cpu.regs[mem.get(addr, 1).get(W8)], 20));
         return ReadResult.new($width, 1, mem.get(cpu.regs[mem.get(addr, 1).get(W8)], $width.size).get($width));
       case PTR:
         return ReadResult.new($width, BitWidth.W64.size, mem.get(mem.get(addr, BitWidth.W64.size).get(W64), $width.size).get($width));
@@ -590,14 +592,14 @@ macro ReadResult @read(Instruction inst, ulong offset, #arg_type, BitWidth $widt
     {
       case NUM:
         $if $width == W64:
-          return ReadResult.new($width, $width.size, @as(long, *cpu.inst_ptr) + @as(long, mem.get(addr, $width.size).get($width)));
+          return ReadResult.new($width, $width.size, @as(long, addr) + @as(long, mem.get(addr, $width.size).get($width)));
         $else
           logger::error("Can only read a 64 bit number relatively");
         $endif
       case PTR:
-        return ReadResult.new($width, BitWidth.W64.size, mem.get(@as(long, *cpu.inst_ptr) + @as(long, mem.get(addr, BitWidth.W64.size).as_W64()), $width.size).get($width));
+        return ReadResult.new($width, BitWidth.W64.size, mem.get(@as(long, addr) + @as(long, mem.get(addr, BitWidth.W64.size).as_W64()), $width.size).get($width));
       case REGPTR:
-        return ReadResult.new($width, 1, mem.get(@as(long, *cpu.inst_ptr) + @as(long, cpu.regs[mem.get(addr, 1).as_W8()]), $width.size).get($width));
+        return ReadResult.new($width, 1, mem.get(@as(long, addr) + @as(long, cpu.regs[mem.get(addr, 1).as_W8()]), $width.size).get($width));
       case REG:
         logger::error("Cannot read %s relatively (yet)", inst.#arg_type);
     }
