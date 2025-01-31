@@ -74,9 +74,10 @@ enum ArgType : char (OpType op)
 }
 
 // TODO
-char[10] temp_;
+//char[10] temp_;
 fn char[] Arg.to_bytes(self, InstTok* tok, LProg* prog, usz own_idx)
 {
+  char[] temp_ = mem::temp_new_array(char, 10);
   switch (self.type)
   {
     case PTR:
@@ -100,7 +101,7 @@ fn char[] Arg.to_bytes(self, InstTok* tok, LProg* prog, usz own_idx)
     case NONE:
       break;
   }
-  return {};
+  return temp_[:0];
 }
 
 fn bool ArgType.relative(self)
@@ -176,8 +177,10 @@ fn Bytes InstTok.to_bytes(&self, LProg* prog, usz own_idx)
       io::printn();
     $endif
 //    self.arg_src.to_bytes()
-    logger::debug("WTF: %.16x", self.resolve_label(prog, self.arg_src.as_LABEL, own_idx));
+    logger::debug("TEST");
+    logger::debug("WTF: src: %h dst: %h", self.arg_src.to_bytes(self, prog, own_idx), self.arg_dst.to_bytes(self, prog, own_idx));
     b.add_array(self.arg_src.to_bytes(self, prog, own_idx));
+    logger::debug("WTF2: %h", b.array_view());
   }
   else
   {
@@ -191,7 +194,7 @@ fn Bytes InstTok.to_bytes(&self, LProg* prog, usz own_idx)
         b.add_array(self.arg_src.to_bytes(self, prog, own_idx));
         b.add_array(self.arg_dst.to_bytes(self, prog, own_idx));
       case 1:
-        b.add_array(self.arg_dst.to_bytes(self, prog, own_idx));
+        b.add_array(self.arg_src.to_bytes(self, prog, own_idx));
       case 0:
         break;
       default:

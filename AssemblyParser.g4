@@ -1,4 +1,4 @@
-grammar ExprParser;
+grammar AssemblyParser;
 //options { tokenVocab=ExprLexer; }
 
 program
@@ -26,7 +26,11 @@ expr
  ;
 
 INSTRUCTION
- : STRING PERIOD NUMBER?
+ : ( 'nop' | 'jmp' | 'cmp' | 'jif' | 'add' | 'sub' | 'printc' |
+ 'printint' | 'print' | 'mov' | 'ret' | 'exit' | 'and' |
+ 'not' | 'or' | 'xor' | 'nor' | 'xnor' | 'push' | 'pop' | 'dbg'
+ | 'syscall' ) 
+  ( PERIOD NUMBER )?
  ;
  
 LABEL: STRING ;

@@ -8,8 +8,8 @@ import std::time;
 const MEM_SIZE = 0x02000000_0;
 
 // 8 General registers
-const NUM_REGISTERS = 10;
-const String[NUM_REGISTERS] REG_NAMES = {"r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "rsp", "esp"};
+const NUM_REGISTERS = 12;
+const String[NUM_REGISTERS] REG_NAMES = {"r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "rsp", "esp", "scl", "scr"};
 
 
 $assert(usz.sizeof == 8 && "Must be 64 bit");
@@ -30,7 +30,6 @@ bitstruct Instruction : InstSize @overlap
   OpType src_type : 7..9;
   OpType dst_type : 10..12;
 
-//  Condition cond : 11..13;
   bool src_type_rel : 13;
   bool dst_type_rel : 14;
   
@@ -49,7 +48,7 @@ enum InstructionType : char (String name, bool sized, char args)
   SUB = { "sub", true, 2 },
   // Both of these will cease to exist once I create a stdout device
   PRINTC = { "printc", true, 0 },
-  PRINTINT = {"printint", true, 0},
+  PRINTINT = { "printint", true, 0},
   PRINT = { "print", false, 1 },
   //
   MOV = { "mov", true, 2 },
@@ -58,15 +57,14 @@ enum InstructionType : char (String name, bool sized, char args)
   EXIT = { "exit", false, 0 },
 
   AND = { "and", true, 2 },
-  NAND = { "and", true, 2 },
-  NOT = { "not", true, 2 },
+  NOT = { "not", true, 1 },
   OR = { "or", true, 2 },
   XOR = { "xor", true, 2 },
-  NOR = { "nor", true, 2 },
-  XNOR = { "xnor", true, 2 },
   PUSH = { "push", true, 1 },
   POP = { "pop", true, 1 },
   DBG = { "dbg", false, 0},
+  SYSCALL = { "syscall", false, 1 },
+  
 }
 
 enum BitWidth : char (char size, usz bit_size, String name, typeid type)
@@ -107,10 +105,8 @@ enum Condition : char
   return new;
 }*/
 
-macro char[].get(self, BitWidth $width)
-{
-  @profile("char[].get_" +++ $width.nameof) {return self.$eval("as_" +++ $width.nameof)();};
-}
+macro char[].get(self, BitWidth $width) => self.$eval("as_" +++ $width.nameof)();
+
 // TODO: replace all these methods with `$switch` in `char[].as($width)`
 fn char char[].as_W8(self) => self[0];
 
@@ -123,10 +119,7 @@ fn uint char[].as_W32(self) => *@as(uint*, @as(char*, char[]{self[3], self[2], s
 fn ulong char[].as_W64(self) => *@as(ulong*, @as(char*, char[]{self[0], self[1], 
                                  self[2], self[3], self[4], self[5], self[6], self[7]}));
 
-macro void char[].set(self, BitWidth $width, val)
-{
-  @profile("char[].set_" +++ $width.nameof) {self.$eval("set_" +++ $width.nameof)(val);};
-}
+macro void char[].set(self, BitWidth $width, val) => self.$eval("set_" +++ $width.nameof)(val);
 
 fn void char[].set_W8(self, char val) => self[0] = val;
 
@@ -196,7 +189,7 @@ macro @eachif_arr(value, $values, #attribute = null, $failable = true; @body($ma
   $endif
 }
 
-usz current_bench_depth = 0;
+/*usz current_bench_depth = 0;
 macro @profile(String name; @body()) @builtin
 {
   $if $feature(BENCH):
@@ -213,4 +206,5 @@ macro @profile(String name; @body()) @builtin
     $endif
   @body();
 }
+*/
 
