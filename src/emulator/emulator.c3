@@ -4,7 +4,7 @@ import logger;
 
 import std::io;
 import std::thread;
-
+import std::time;
 
 struct ReadResult
 {
@@ -94,6 +94,7 @@ struct Cpu
 
 fn void Cpu.init(&self)
 {
+  self.regs = {};
   self.inst_ptr = &self.regs[9];
   self.stack_ptr = &self.regs[8];
   self.syscl_addr = &self.regs[10];
@@ -109,7 +110,7 @@ fn int main(String[] args)
   cpu.init();
   mem.new_init(common::MEM_SIZE);
   defer mem.free();
-  Instruction test = {.real = true, .type = MOV, .width = W32, .src_type = NUM, .dst_type = REG};
+  Instruction test = {.real = true, .type = JMP, .src_type = NUM};
 //{.real = true, .type = JIF, .jif_cond = NE, .width = W8, .dst_type = NUM};//{.real = true, .type = JIF, .width = W8, .src_type = NUM, .dst_type = REG};
 //{.real = true, .type = JIF, .jif_cond = NE, .offset_kind = SRC, .width = W8, .dst_type = NUM};//{.real = true, .type = MOV, .width = W64, .src_type = NUM, .dst_type = REG};
   //{.real = true, .type = JIF, .jif_cond = NE, .offset_kind = SRC, .width = W8, .src_type = PTR,.dst_type = PTR}; // {.type = CMP, .width = W8, .src_type = REGPTR, .dst_type = NUM, .offset_kind = NONE, .real = true };
@@ -132,13 +133,18 @@ fn int main(String[] args)
   }
   else
   {
-    prog = x"88e9 00000000000000ff 01 8989 01 00 8006 88e4 0000000000000001 01 8882 00 00 8483 000000000000000b 800b";//x"e988 0001000000000000 08 1280 0b80";
+    prog = x"88e9 00000000000000ff 01 8989 01 00 88e4 0000000000000001 01 8882 00 00 8483 000000000000000b 8081 0000000000000000 800b";
+
+        // Push test
+        //x"e988 0001000000000000 08 1280 0b80";
 
         // Hello World (little-endian):
         // x"e988 ff00000000000000 01 8989 01 00 0680 e488 0100000000000000 01 8288 00 00 8384 0b00000000000000 0b80";
 
         // Hello World (big-endian)
         // x"88e9 00000000000000ff 01 8989 01 00 8006 88e4 0000000000000001 01 8882 00 00 8483 000000000000000b 800b";
+        // Hello World loop
+        // x"88e9 00000000000000ff 01 8989 01 00 8006 88e4 0000000000000001 01 8882 00 00 8483 000000000000000b 8081 0000000000000000 800b";
 
         // x"83a4 00 0000000000000000";//" 88e9 00000000000000ff 01 8989 01 00 8006 88e4 0000000000000001 01 8582 00 00 9083 000000000000000b 800b";
 //         x"88e9 00000000000000ff 01 8989 01 00 8006 88e4 0000000000000001 01 8c82 00 00 9483 ffffffffffffffe9 800b";
@@ -173,7 +179,8 @@ fn int main(String[] args)
   while (running)
   {
     $if $feature(PERF):
-      if (iteration == 1000000000 - 1) running = false; if (iteration % 5000000 == 0)io::printfn("CPU Cycle: %s", iteration);
+      if (iteration == 1000000000 - 1) running = false;
+      if (iteration % 5000000 == 0) io::printfn("CPU Cycle: %s", iteration);
     $endif
     // Fetch, Decode, Execute
     // https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#fetchdecodeexecute-loop
@@ -213,7 +220,7 @@ fn int main(String[] args)
        }
      case JMP:
        ulong old = *cpu.inst_ptr;
-       ulong new = @read(inst, 0, dst_type, W64).get(W64);
+       ulong new = @read(inst, 0, src_type, W64).get(W64);
        logger::debug("JMPing from %s to %s", old, new);
        *cpu.inst_ptr = new;
      case PRINTC:
@@ -396,7 +403,7 @@ fn int main(String[] args)
   }
   $if $feature(PERF):
     NanoDuration nano_seconds = clock.mark(); 
-    io::printfn("Took %s or %s ns to do %s iterations, hz/ns", nano_seconds, ((long)nano_seconds/(double)1000000000), iteration);
+    io::printfn("Took %s or %s ns to do %s iterations, %shz", nano_seconds, @as(long, nano_seconds), iteration, @as(double, iteration) / @as(double, nano_seconds));
   $endif
 
   return 0;
@@ -406,8 +413,11 @@ macro vm_mov(Instruction inst, BitWidth $width)
 {
   ReadResult out = @read(inst, 0, src_type, $width);
   *cpu.inst_ptr += out.diff;
+  logger::debug("MOV 1: inst_ptr += %s", out.diff);
   logger::debug("MOVing %s (0x%x)", out.get($width), out.get($width));
-  *cpu.inst_ptr += @write(inst, $width, out.get($width));
+  usz mov = @write(inst, $width, out.get($width));
+  logger::debug("MOV 2: inst_ptr += %s", mov);
+  *cpu.inst_ptr += mov;
 }
 
 macro vm_add(Instruction inst, BitWidth $width)
@@ -416,8 +426,9 @@ macro vm_add(Instruction inst, BitWidth $width)
   ReadResult dst = @read(inst, src.diff, dst_type, $width);
   logger::debug("adding %s to %s", src.get($width), dst.get($width));
 
+  *cpu.inst_ptr += src.diff;
   (void)@write(inst, $width, @as($typefrom($width.type), dst.get($width) + src.get($width)));
-  *cpu.inst_ptr += src.diff + dst.diff;
+  *cpu.inst_ptr += dst.diff;
 
   logger::debug("inst_ptr after write %s", *cpu.inst_ptr);
 
@@ -560,12 +571,12 @@ macro ReadResult @read(Instruction inst, ulong offset, #arg_type, BitWidth $widt
 //        logger::debug("NUM: nearby memory: %s, number: %x", mem.get(addr, 10), mem.get(addr, $width.size).get($width));
         return ReadResult.new($width, $width.size, mem.get(addr, $width.size).get($width));
       case REG:
-        logger::debug("REG contains %.16x", cpu.regs[mem.get(addr, 1).as_W8()]);
-        return ReadResult.new($width, 1, cpu.regs[mem.get(addr, 1).as_W8()].read($width));
+        logger::debug("REG %s (%s) contains %.16x (8: %.2x, 16: %.4x, 32: %.8x, 64: %.16x)", common::REG_NAMES[mem.get(addr, 1).get(W8)], $width, cpu.regs[mem.get(addr, 1).get(W8)], cpu.regs[mem.get(addr, 1).get(W8)].read(W8), cpu.regs[mem.get(addr, 1).get(W8)].read(W16), cpu.regs[mem.get(addr, 1).get(W8)].read(W32), cpu.regs[mem.get(addr, 1).get(W8)].read(W64));
+        return ReadResult.new($width, 1, cpu.regs[mem.get(addr, 1).get(W8)].read($width));
       case REGPTR:
-        return ReadResult.new($width, 1, mem.get(cpu.regs[mem.get(addr, 1).as_W8()], $width.size).get($width));
+        return ReadResult.new($width, 1, mem.get(cpu.regs[mem.get(addr, 1).get(W8)], $width.size).get($width));
       case PTR:
-        return ReadResult.new($width, BitWidth.W64.size, mem.get(mem.get(addr, BitWidth.W64.size).as_W64(), $width.size).get($width));
+        return ReadResult.new($width, BitWidth.W64.size, mem.get(mem.get(addr, BitWidth.W64.size).get(W64), $width.size).get($width));
 //      default:
 //        logger::error("Not Implemented: %s", inst.dst_type);
     }

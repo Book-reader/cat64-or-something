@@ -110,14 +110,12 @@ macro char[].get(self, BitWidth $width) => self.$eval("as_" +++ $width.nameof)()
 // TODO: replace all these methods with `$switch` in `char[].as($width)`
 fn char char[].as_W8(self) => self[0];
 
-fn ushort char[].as_W16(self) => *@as(ushort*, @as(char*, char[]{self[0], self[1], 
-                                                 0, 0, 0, 0, 0, 0}));
+fn ushort char[].as_W16(self) => *@as(ushort*, @as(char*, char[]{self[1], self[0]}));
 
-fn uint char[].as_W32(self) => *@as(uint*, @as(char*, char[]{self[0], self[1], self[2],
-                                                       self[3], 0, 0, 0, 0}));
+fn uint char[].as_W32(self) => *@as(uint*, @as(char*, char[]{self[3], self[2], self[1], self[0]}));
 
-fn ulong char[].as_W64(self) => *@as(ulong*, @as(char*, char[]{self[0], self[1], 
-                                 self[2], self[3], self[4], self[5], self[6], self[7]}));
+fn ulong char[].as_W64(self) => *@as(ulong*, @as(char*, char[]{self[7], self[6], 
+                                 self[5], self[4], self[3], self[2], self[1], self[0]}));
 
 macro void char[].set(self, BitWidth $width, val) => self.$eval("set_" +++ $width.nameof)(val);
 
@@ -125,26 +123,26 @@ fn void char[].set_W8(self, char val) => self[0] = val;
 
 fn void char[].set_W16(self, ushort val)
 {
-  self[0] = @as(char, val);
-  self[1] = @as(char, val >> 8);
+  self[1] = @as(char, val);
+  self[0] = @as(char, val >> 8);
 }
 fn void char[].set_W32(self, uint val)
 {
-  self[0] = @as(char, val);
-  self[1] = @as(char, val >> 8);
-  self[2] = @as(char, val >> 16);
-  self[3] = @as(char, val >> 24);
+  self[3] = @as(char, val);
+  self[2] = @as(char, val >> 8);
+  self[1] = @as(char, val >> 16);
+  self[0] = @as(char, val >> 24);
 }
 fn void char[].set_W64(self, ulong val)
 {
-  self[0] = @as(char, val);
-  self[1] = @as(char, val >> 8);
-  self[2] = @as(char, val >> 16);
-  self[3] = @as(char, val >> 24);
-  self[4] = @as(char, val >> 32);
-  self[5] = @as(char, val >> 40);
-  self[6] = @as(char, val >> 48);
-  self[7] = @as(char, val >> 56);
+  self[7] = @as(char, val);
+  self[6] = @as(char, val >> 8);
+  self[5] = @as(char, val >> 16);
+  self[4] = @as(char, val >> 24);
+  self[3] = @as(char, val >> 32);
+  self[2] = @as(char, val >> 40);
+  self[1] = @as(char, val >> 48);
+  self[0] = @as(char, val >> 56);
 }
 
 // We have zig at home:
