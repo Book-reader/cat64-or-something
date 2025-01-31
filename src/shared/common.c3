@@ -113,8 +113,8 @@ fn char char[].as_W8(self) => self[0];
 fn ushort char[].as_W16(self) => *@as(ushort*, @as(char*, char[]{self[0], self[1], 
                                                  0, 0, 0, 0, 0, 0}));
 
-fn uint char[].as_W32(self) => *@as(uint*, @as(char*, char[]{self[3], self[2], self[1],
-                                                       self[0], 0, 0, 0, 0}));
+fn uint char[].as_W32(self) => *@as(uint*, @as(char*, char[]{self[0], self[1], self[2],
+                                                       self[3], 0, 0, 0, 0}));
 
 fn ulong char[].as_W64(self) => *@as(ulong*, @as(char*, char[]{self[0], self[1], 
                                  self[2], self[3], self[4], self[5], self[6], self[7]}));
