@@ -8,8 +8,8 @@ import std::io;
 import std::collections::list;
 import std::collections::tuple;
 
-def LProg = List(<InstTok>);
-def Bytes = List(<char>);
+def LProg = List<[InstTok]>;
+def Bytes = List<[char]>;
 
 macro Bytes Bytes.new(...) @operator(construct)
 {

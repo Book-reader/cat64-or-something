@@ -46,15 +46,18 @@ enum InstructionType : char (String name, bool sized, char args)
   JIF = { "jif", false, 2 }, // Only takes 1 agument in the vm, as the first argument is embedded in the instruction
   ADD = { "add", true, 2 },
   SUB = { "sub", true, 2 },
+  CALL = { "call", false, 0 },
+  RET = { "ret", false, 0 }, // this might be a pseudo instruction
+
+  EXIT = { "exit", false, 0 },
+
   // Both of these will cease to exist once I create a stdout device
+  PRINT = { "print", false, 1 },
   PRINTC = { "printc", true, 0 },
   PRINTINT = { "printint", true, 0},
-  PRINT = { "print", false, 1 },
-  //
+
   MOV = { "mov", true, 2 },
-  RET = { "ret", false, 0 }, // this might be a pseudo instruction
   // Temp instruction that exits the emulator
-  EXIT = { "exit", false, 0 },
 
   AND = { "and", true, 2 },
   NOT = { "not", true, 1 },
@@ -64,7 +67,14 @@ enum InstructionType : char (String name, bool sized, char args)
   POP = { "pop", true, 1 },
   DBG = { "dbg", false, 0},
   SYSCALL = { "syscall", false, 1 },
-  
+
+  ICMP = { "icmp", true, 2 },
+  IADD = { "iadd", true, 2 },
+  ISUB = { "isub", true, 2 },
+  MUL = { "mul", true, 2 },
+  DIV = { "div", true, 2 },
+  IMUL = { "imul", true, 2 },
+  IDIV = { "idiv", true, 2 },
 }
 
 enum BitWidth : char (char size, usz bit_size, String name, typeid type)
