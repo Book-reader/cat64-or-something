@@ -40,6 +40,23 @@ fn void main()
       c.wn("assert(cpu.regs[0] == expected, \"Expected 0x%%x, got 0x%%x\", expected, cpu.regs[0])");
     };
 
+/*
+fn void mov_8_ptr_to_reg()
+{
+  main({"test", x"8809 000000000000000d 04 8008 24"});
+  usz expected = 0x24;
+  assert(cpu.regs[4] == expected, "Expected 0x%x, got 0x%x", expected, cpu.regs[4]);
+}
+
+// REGPTR TO REG
+fn void mov_64_regptr_to_reg()
+{
+  main({"test", x"88e9 0000000000000011 02 89e9 02 05 8008 f38bc34d3521f562"});
+  usz expected = 0xf38bc34d3521f562;
+  assert(cpu.regs[5] == expected, "Expected 0x%x, got 0x%x", expected, cpu.regs[5]);
+}
+*/
+
   }
   $endforeach
 

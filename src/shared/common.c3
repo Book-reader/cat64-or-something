@@ -77,7 +77,7 @@ enum InstructionType : char (String name, bool sized, char args)
   IDIV = { "idiv", true, 2 },
 }
 
-enum BitWidth : char (char size, usz bit_size, String name, typeid type)
+enum BitWidth : char (inline usz size, usz bit_size, String name, typeid type)
 {
   W8 = { 1, 8, "8", char.typeid },
   W16 = { 2, 16, "16", ushort.typeid },
