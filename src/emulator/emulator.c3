@@ -509,31 +509,31 @@ macro vm_xor(Instruction inst, BitWidth $width)
 
 macro vm_push(Instruction inst, BitWidth $width)
 {
-  *cpu.stack_ptr -= $width;
+  *cpu.stack_ptr -= $width.size;
   ReadResult src = read_src(inst, 0, $width);
   *cpu.inst_ptr += src.diff;
 
-  char[$width] buf;
+  char[$width.size] buf;
   buf[..].set($width, src.get($width));
-  mem.set(*cpu.stack_ptr, $width, buf[:$width]);
+  mem.set(*cpu.stack_ptr, $width.size, buf[:$width.size]);
 }
 
 macro vm_pop(Instruction inst, BitWidth $width)
 {
-  *cpu.inst_ptr += write(inst, $width, mem.get(*cpu.stack_ptr, $width).get($width));
-  *cpu.stack_ptr += $width;
+  *cpu.inst_ptr += write(inst, $width, mem.get(*cpu.stack_ptr, $width.size).get($width));
+  *cpu.stack_ptr += $width.size;
 }
 fn void vm_syscall(Instruction inst)
 {
   ReadResult src = read_src(inst, 0, W64);
   *cpu.inst_ptr += src.diff;
   *cpu.syscl_ret = *cpu.inst_ptr + 1;
-  *cpu.inst_ptr = src.get(W64) * BitWidth.W64 + *cpu.syscl_addr;
+  *cpu.inst_ptr = src.get(W64) * BitWidth.W64.size + *cpu.syscl_addr;
 }
 
 fn void vm_ret(Instruction inst)
 {
-  *cpu.inst_ptr = mem.get(*cpu.stack_ptr, BitWidth.W64).get(W64);
+  *cpu.inst_ptr = mem.get(*cpu.stack_ptr, BitWidth.W64.size).get(W64);
 }
 
 macro write(Instruction inst, BitWidth $width, value) => @write<[$width]>(&cpu, &mem, inst, value);
@@ -557,17 +557,17 @@ macro ReadResult @read(Cpu* cpu, Memory* mem, Instruction inst, ulong offset, #a
     switch (inst.#arg_type)
     {
       case NUM:
-//        logger::debug("NUM: nearby memory: %s, number: %x", mem.get(addr, 10), mem.get(addr, WIDTH).get(WIDTH));
-        return ReadResult.new(WIDTH, WIDTH, mem.get(addr, WIDTH).get(WIDTH));
+//        logger::debug("NUM: nearby memory: %s, number: %x", mem.get(addr, 10), mem.get(addr, WIDTH.size).get(WIDTH));
+        return ReadResult.new(WIDTH, WIDTH.size, mem.get(addr, WIDTH.size).get(WIDTH));
       case REG:
         logger::debug("REG %s (%s) contains %.16x (8: %.2x, 16: %.4x, 32: %.8x, 64: %.16x)", common::REG_NAMES[mem.get(addr, 1).get(W8)], WIDTH, cpu.regs[mem.get(addr, 1).get(W8)], cpu.regs[mem.get(addr, 1).get(W8)].read(W8), cpu.regs[mem.get(addr, 1).get(W8)].read(W16), cpu.regs[mem.get(addr, 1).get(W8)].read(W32), cpu.regs[mem.get(addr, 1).get(W8)].read(W64));
         return ReadResult.new(WIDTH, 1, cpu.regs[mem.get(addr, 1).get(W8)].read(WIDTH));
       case REGPTR:
-        logger::debug("REGPTR %s contains %.16x pointing to %h", common::REG_NAMES[mem.get(addr, 1).get(W8)], cpu.regs[mem.get(addr, 1).get(W8)], mem.get(cpu.regs[mem.get(addr, 1).get(W8)], WIDTH));
+        logger::debug("REGPTR %s contains %.16x pointing to %h", common::REG_NAMES[mem.get(addr, 1).get(W8)], cpu.regs[mem.get(addr, 1).get(W8)], mem.get(cpu.regs[mem.get(addr, 1).get(W8)], WIDTH.size));
         logger::debug("Nearby REGPTR: %h", mem.get(cpu.regs[mem.get(addr, 1).get(W8)], 20));
-        return ReadResult.new(WIDTH, 1, mem.get(cpu.regs[mem.get(addr, 1).get(W8)], WIDTH).get(WIDTH));
+        return ReadResult.new(WIDTH, 1, mem.get(cpu.regs[mem.get(addr, 1).get(W8)], WIDTH.size).get(WIDTH));
       case PTR:
-        return ReadResult.new(WIDTH, BitWidth.W64, mem.get(mem.get(addr, BitWidth.W64).get(W64), WIDTH).get(WIDTH));
+        return ReadResult.new(WIDTH, BitWidth.W64.size, mem.get(mem.get(addr, BitWidth.W64.size).get(W64), WIDTH.size).get(WIDTH));
 //      default:
 //        logger::error("Not Implemented: %s", inst.dst_type);
     }
@@ -581,14 +581,14 @@ macro ReadResult @read(Cpu* cpu, Memory* mem, Instruction inst, ulong offset, #a
     {
       case NUM:
         $if WIDTH == W64:
-          return ReadResult.new(WIDTH, WIDTH, @as(long, addr) + @as(long, mem.get(addr, WIDTH).get(WIDTH)));
+          return ReadResult.new(WIDTH, WIDTH.size, @as(long, addr) + @as(long, mem.get(addr, WIDTH.size).get(WIDTH)));
         $else
           logger::error("Can only read a 64 bit number relatively");
         $endif
       case PTR:
-        return ReadResult.new(WIDTH, BitWidth.W64, mem.get(@as(long, addr) + @as(long, mem.get(addr, BitWidth.W64).as_W64()), WIDTH).get(WIDTH));
+        return ReadResult.new(WIDTH, BitWidth.W64.size, mem.get(@as(long, addr) + @as(long, mem.get(addr, BitWidth.W64.size).as_W64()), WIDTH.size).get(WIDTH));
       case REGPTR:
-        return ReadResult.new(WIDTH, 1, mem.get(@as(long, addr) + @as(long, cpu.regs[mem.get(addr, 1).as_W8()]), WIDTH).get(WIDTH));
+        return ReadResult.new(WIDTH, 1, mem.get(@as(long, addr) + @as(long, cpu.regs[mem.get(addr, 1).as_W8()]), WIDTH.size).get(WIDTH));
       case REG:
         logger::error("Cannot read %s relatively (yet)", inst.#arg_type);
     }
