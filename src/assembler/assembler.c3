@@ -81,12 +81,12 @@ fn char[] Arg.to_bytes(self, InstTok* tok, LProg* prog, usz own_idx)
   switch (self.type)
   {
     case PTR:
-      temp_[:BitWidth.W64.size] = to_bytes(W64, self.as_PTR)[:BitWidth.W64.size];
-      return temp_[:BitWidth.W64.size];
+      temp_[:BitWidth.W64] = to_bytes(W64, self.as_PTR)[:BitWidth.W64];
+      return temp_[:BitWidth.W64];
 
     case NUM:
-      temp_[:self.size.size] = to_bytes(self.size, self.as_NUM)[:self.size.size];
-      return temp_[:self.size.size];
+      temp_[:self.size] = to_bytes(self.size, self.as_NUM)[:self.size];
+      return temp_[:self.size];
 
     case REG:
     case REGPTR:
@@ -95,8 +95,8 @@ fn char[] Arg.to_bytes(self, InstTok* tok, LProg* prog, usz own_idx)
 
     case LABEL:
     case LABEL_DEREF:
-      temp_[:BitWidth.W64.size] = to_bytes(W64, @as(ulong, tok.resolve_label(prog, self.as_LABEL, own_idx)))[:BitWidth.W64.size];
-      return temp_[:BitWidth.W64.size];
+      temp_[:BitWidth.W64] = to_bytes(W64, @as(ulong, tok.resolve_label(prog, self.as_LABEL, own_idx)))[:BitWidth.W64];
+      return temp_[:BitWidth.W64];
 
     case NONE:
       break;
@@ -137,7 +137,7 @@ macro usz InstTok.@get_arg_size(&self, #arg)
     switch (self.#arg.type)
     {
       case NUM:
-        return self.width.size;
+        return self.width;
         //return self.#arg.size.size;
 /*      @eachif(self.width; $bitwidth)
         {
