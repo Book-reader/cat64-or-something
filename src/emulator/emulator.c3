@@ -5,6 +5,7 @@ import logger;
 import std::io;
 import std::thread;
 import std::time;
+import std::collections::list;
 
 struct ReadResult
 {
@@ -27,28 +28,87 @@ macro ReadResult ReadResult.new(BitWidth $width, usz diff, val) @operator(constr
 
 macro ReadResult.get(self, BitWidth $width) => self.$eval("as_" +++ $width.nameof);
 
-struct Memory
+interface Addressable
 {
-  char[] ram;
+  fn void free();
+  fn char get(ulong address);
+  fn bool contains(ulong address);
+  fn void set(ulong address, char value);
+  fn char[] get_range(ulong address, ulong len);
+  fn bool contains_range(ulong address, ulong len);
+  fn void set_range(ulong address, char[] values);
 }
 
-fn void Memory.new_init(&self, usz size)
+struct MemoryManagementUnit
 {
+  List<[Addressable]> memory;
+}
+
+fn MemoryManagementUnit MemoryManagementUnit.new_init() @operator(construct)
+{
+  MemoryManagementUnit new;
+  new.memory.new_init();
+  return new;
+}
+
+fn void MemoryManagementUnit.free(&self)
+{
+  foreach (i : self.memory)
+  {
+    i.free();
+  }
+  self.memory.free();
+}
+
+fn Addressable! MemoryManagementUnit.request(&self, ulong address)
+{
+  foreach (mem : self.memory)
+  {
+    if (mem.contains(address)) return mem;
+  }
+  return MemoryError.OUT_OF_BOUNDS?;
+}
+
+fn bool MemoryManagementUnit.contains(&self, ulong address) => @ok(self.request(address));
+
+fault MemoryError
+{
+  OUT_OF_BOUNDS,
+  NO_READ,
+  NO_WRITE,
+}
+
+struct Memory// (Addressable)
+{
+  char[] ram;
+  ulong offset;
+}
+
+fn void Memory.new_init(&self, usz size, usz offset = 0)
+{
+  self.offset = offset;
   self.ram = mem::new_array(char, size);
 }
 
-fn void Memory.free(&self)
+fn void Memory.free(&self) @dynamic
 {
   mem::free(self.ram);
 }
 
-// TODO: paging, it will also need to be a flag
-fn char[] Memory.get(&self, usz start, usz len) @inline => self.ram[start:len];
+/*fn bool Memory.contains(self, ulong addr) @inline => addr - self.offset < self.ram.len;
+// TODO: paging, it will also need to be a cpu flag
+fn char Memory.get(self, ulong addr) @inline => self.ram[addr-self.offset:len];
+fn void Memory.set(&self, ulong addr, char new) @inline => self.ram[addr-self.offset] = new;
 
-fn void Memory.set(&self, usz start, usz len, char[] new)
-{
-  self.ram[start:len] = new;
-}
+fn bool Memory.contains_range(self, ulong start_addr, ulong len) @inline => self.contains(start_addr) && self.contains(start_addr + len - 1);
+fn char[] Memory.get_range(self, ulong start_addr, ulong len) @inline => self.ram[start_addr-self.offset:len];
+fn void Memory.set_range(self, ulong start_addr, ulong len, char[] new) @inline => self.ram[start_addr-self.offset:len] = new[:len];*/
+
+fn bool Memory._contains(self, ulong addr) @inline => addr - self.offset < self.ram.len;
+
+fn bool Memory.contains(self, ulong start_addr, ulong len) @inline => self._contains(start_addr) && self._contains(start_addr + len - 1);
+fn char[] Memory.get(self, ulong start_addr, ulong len) @inline => self.ram[start_addr-self.offset:len];
+fn void Memory.set(self, ulong start_addr, ulong len, char[] new) @inline => self.ram[start_addr-self.offset:len] = new[:len];
 
 def Register = ulong;
 
@@ -299,6 +359,8 @@ fn int main(String[] args)
         {
           logger::debug("Condition was true");
           // TODO: use the actual instruction and set the width to 64 in the assembler
+
+          // FIXME: FML jif_cond overwrites src_type. I need to make it overwrite dst_type instead
           ulong old = *cpu.inst_ptr;
           logger::debug("JIF: dst_rel %s src_rel %s", inst.dst_type_rel, inst.src_type_rel);
           ReadResult new = read_src(inst, 0, W64);
