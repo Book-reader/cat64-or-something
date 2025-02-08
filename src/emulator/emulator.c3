@@ -164,7 +164,8 @@ fn void Cpu.init(&self)
 }
 
 Memory mem;
-Cpu cpu;
+// TODO: multithreading by sending data between cpu structs with an array and a mutex
+tlocal Cpu cpu;
 
 
 fn int main(String[] args)
@@ -172,13 +173,15 @@ fn int main(String[] args)
   cpu.init();
   mem.new_init(common::MEM_SIZE);
   defer mem.free();
-  Instruction test = {.real = true, .type = MOV, .width = W64, .src_type = REGPTR, .dst_type = REG};
+  InstructionType test = AJMPI;
+  BitWidth test2 = W64;
+//  Instruction test = {.real = true, .type = MOV, .width = W64, .src_type = REGPTR, .dst_type = REG};
 //{.real = true, .type = JIF, .jif_cond = NE, .width = W8, .dst_type = NUM};//{.real = true, .type = JIF, .width = W8, .src_type = NUM, .dst_type = REG};
 //{.real = true, .type = JIF, .jif_cond = NE, .offset_kind = SRC, .width = W8, .dst_type = NUM};//{.real = true, .type = MOV, .width = W64, .src_type = NUM, .dst_type = REG};
   //{.real = true, .type = JIF, .jif_cond = NE, .offset_kind = SRC, .width = W8, .src_type = PTR,.dst_type = PTR}; // {.type = CMP, .width = W8, .src_type = REGPTR, .dst_type = NUM, .offset_kind = NONE, .real = true };
 //  char[2] a;
 //  set_W16(&a, (InstSize)test);
-  logger::debug("test: %.4x %h 00b6: \u00b6", @as(InstSize, test), /*a*/);
+  logger::debug("test: %.2x %.2x 00b6: \u00b6", test, test2);
 
   char[] prog;
 
@@ -195,7 +198,7 @@ fn int main(String[] args)
   }
   else
   {
-    prog = x"88e9 48031785f3ad783f 02 800b";//x"88e9 00000000000000ff 01 8989 01 00 88e4 0000000000000001 01 8882 00 00 8483 000000000000000b 8081 0000000000000000 800b";
+    prog = x"3b00 41 3b00 0a 1403 0000000000000000 3400";//x"88e9 00000000000000ff 01 8989 01 00 88e4 0000000000000001 01 8882 00 00 8483 000000000000000b 8081 0000000000000000 800b";
 
         // Push test
         //x"e988 0001000000000000 08 1280 0b80";
@@ -241,213 +244,59 @@ fn int main(String[] args)
   while (running)
   {
     $if $feature(PERF):
-      if (iteration == 100000000 - 1) running = false; //1000000000
+      iteration += 1;
+      if ((iteration % 100000000) == 0)
+      {
+//        running = false; //1000000000
+        NanoDuration nano_seconds = clock.mark(); 
+        io::printfn("\nTook %s or %s ns to do %s iterations, %dMhz", nano_seconds, @as(long, nano_seconds), iteration, (@as(double, iteration) /  nano_seconds.to_sec() / 1000000).round() );
+        thread::sleep(time::sec(1));
+        iteration = 0;
+        clock = clock::now();
+        continue;
+      }
 //      if (iteration % 5000000 == 0) io::printfn("CPU Cycle: %s", iteration);
     $endif
     // Fetch, Decode, Execute
     // https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#fetchdecodeexecute-loop
-    Instruction inst = @as(Instruction, mem.get(*cpu.inst_ptr, 2).get(W16));
+    char inst_code = mem.get(*cpu.inst_ptr, 2).get(W8);
+    if (inst_code > InstructionType.elements - 1) invalid_instruction(inst_code);
+    InstructionType inst = InstructionType.from_ordinal(inst_code);
 
-    logger::debug("%s: %.4x -> %s.%s %s, %s", *cpu.inst_ptr, @as(InstSize, inst), inst.type, inst.width, inst.type == JIF ? inst.jif_cond.nameof : inst.dst_type.nameof, inst.src_type);
+    char width_code = mem.get(*cpu.inst_ptr + 1, 2).get(W8);
+    if (width_code > InstructionType.elements - 1) invalid_instruction(width_code);
+    BitWidth width = BitWidth.from_ordinal(width_code);
+
+
+    logger::debug("%s -> %s%s (0x%.2x.0x%.2x)", *cpu.inst_ptr, inst.name, width.suffix, inst, width);
+//    logger::debug("%s: %.4x -> %s.%s %s, %s", *cpu.inst_ptr, @as(InstSize, inst), inst.type, inst.width, inst.type == JIF ? inst.jif_cond.nameof : inst.dst_type.nameof, inst.src_type);
 
 
     // Big brain error checking
-    if (!inst.real)
-    {
-      logger::error("Invalid instruction: %.4x", @as(InstSize, inst));
+//    if (!inst.real)
+//    {
+//      logger::error("Invalid instruction: %.4x", @as(InstSize, inst));
 //      running = false;
 //      continue;
-    }
-
-    $if $feature(PERF):
-      iteration += 1;
-    $endif
+//    }
 
     // Point at the next byte
     *cpu.inst_ptr += 2;
+
     // Execute the current instruction
-    switch (inst.type)
+    switch (inst)
     {
-     case MOV:
-       switch (inst.width)
-       {
-         case W8:
-           vm_mov(inst, W8);
-         case W16:
-           vm_mov(inst, W16);
-         case W32:
-           vm_mov(inst, W32);
-         case W64:
-           vm_mov(inst, W64);
-       }
-     case JMP:
-       ulong old = *cpu.inst_ptr;
-       ulong new = read_src(inst, 0, W64).get(W64);
-       logger::debug("JMPing from %s to %s", old, new);
-       *cpu.inst_ptr = new;
-     case PRINTC:
-       logger::debug("Printing %d %c", cpu.regs[0], cpu.regs[0]);
-       logger::debug("mem at reg 1: %d %c", mem.get(cpu.regs[1], 1)[0], mem.get(cpu.regs[1], 1)[0]);
-       io::printf("%c", cpu.regs[0]);
-     case PRINTINT:
-       io::printfn("%d", cpu.regs[0]);
-     case PRINT:
-       io::printf("%s", @as(ZString, cpu.regs[0]));
-     case ADD:
-       switch (inst.width)
-       {
-         case W8:
-           vm_add(inst, W8);
-          case W16:
-            vm_add(inst, W16);
-          case W32:
-            vm_add(inst, W32);
-          case W64:
-            vm_add(inst, W64);
-        }
-
-      case SUB:
-       switch (inst.width)
-       {
-         case W8:
-           vm_sub(inst, W8);
-          case W16:
-            vm_sub(inst, W16);
-          case W32:
-            vm_sub(inst, W32);
-          case W64:
-            vm_sub(inst, W64);
-        }
-
-      case CMP:
-        switch (inst.width)
+      case PRINTI:
+        if (width != W8) logger::error("Only 8-bit PRINTi implemented");
+        logger::debug("Printing char '%c' (0x%x %s)", read_imm(0, W8), read_imm(0, W8), read_imm(0, W8));
+        io::printf("%c", read_imm(0, W8));
+        //@volatile_load(*&&read_imm(0, W8));
+      case AJMPI:
+        @read_immr(0, W8; #val)
         {
-          case W8:
-            vm_cmp(inst, W8);
-          case W16:
-            vm_cmp(inst, W16);
-          case W32:
-            vm_cmp(inst, W32);
-          case W64:
-            vm_cmp(inst, W64);
-        }
-
-      case JIF:
-        bool jmp = false;
-
-        logger::debug("Jumping with condition %s", inst.jif_cond);
-
-        switch (inst.jif_cond)
-        {
-          case NE:
-            logger::debug("NE: %s", !cpu.f_zero);
-            jmp = !cpu.f_zero;
-          case EQ:
-            jmp = cpu.f_zero;
-          case GT:
-            jmp = cpu.f_carry;
-          case GE:
-            jmp = cpu.f_carry || cpu.f_zero;
-          case LT:
-            jmp = !cpu.f_carry && !cpu.f_zero;
-          case LE:
-            jmp = !cpu.f_carry || cpu.f_zero;
-//          default:
-//            logger::error("Condition %s not implemented", inst.jif_cond);
-        }
-        if (jmp)
-        {
-          logger::debug("Condition was true");
-          // TODO: use the actual instruction and set the width to 64 in the assembler
-
-          // FIXME: FML jif_cond overwrites src_type. I need to make it overwrite dst_type instead
-          ulong old = *cpu.inst_ptr;
-          logger::debug("JIF: dst_rel %s src_rel %s", inst.dst_type_rel, inst.src_type_rel);
-          ReadResult new = read_src(inst, 0, W64);
-          logger::debug("Jumping from %s to %s", old, new.get(W64));
-          *cpu.inst_ptr = new.get(W64);
-        }
-        else
-        {
-          logger::debug("Condition was false");
-          *cpu.inst_ptr += ulong.sizeof;
-        }
-      case AND:
-        switch (inst.width)
-        {
-          case W8:
-            vm_and(inst, W8);
-          case W16:
-            vm_and(inst, W16);
-          case W32:
-            vm_and(inst, W32);
-          case W64:
-            vm_and(inst, W64);
-        }
-      case NOT:
-        switch (inst.width)
-        {
-          case W8:
-            vm_not(inst, W8);
-          case W16:
-            vm_not(inst, W16);
-          case W32:
-            vm_not(inst, W32);
-          case W64:
-            vm_not(inst, W64);
-        }
-      case OR:
-        switch (inst.width)
-        {
-          case W8:
-            vm_or(inst, W8);
-          case W16:
-            vm_or(inst, W16);
-          case W32:
-            vm_or(inst, W32);
-          case W64:
-            vm_or(inst, W64);
-        }
-      case XOR:
-        switch (inst.width)
-        {
-          case W8:
-            vm_xor(inst, W8);
-          case W16:
-            vm_xor(inst, W16);
-          case W32:
-            vm_xor(inst, W32);
-          case W64:
-            vm_xor(inst, W64);
-        }
-      case PUSH:
-        switch (inst.width)
-        {
-          case W8:
-            vm_push(inst, W8);
-          case W16:
-            vm_push(inst, W16);
-          case W32:
-            vm_push(inst, W32);
-          case W64:
-            vm_push(inst, W64);
-        }
-      case POP:
-        switch (inst.width)
-        {
-          case W8:
-            vm_pop(inst, W8);
-          case W16:
-            vm_pop(inst, W16);
-          case W32:
-            vm_pop(inst, W32);
-          case W64:
-            vm_pop(inst, W64);
-        }
-      case SYSCALL:
-        vm_syscall(inst);
-      case RET:
-        vm_ret(inst);
+          *cpu.inst_ptr = #val;
+        };
+        continue;
       case DBG:
         foreach (i, reg : cpu.regs)
         {
@@ -455,15 +304,17 @@ fn int main(String[] args)
         }
       case EXIT:
         running = false;
+        continue;
       case NOP:
         break;
       default:
-        logger::error("Instruction %s not implemented yet", inst.type);
+        logger::error("Instruction %s not implemented yet", inst);
     }
     // TODO: set a clock speed
     $if $feature(DELAY):
       thread::sleep(1000000);
     $endif
+    move_forward(inst, width);
   }
   $if $feature(PERF):
     NanoDuration nano_seconds = clock.mark(); 
@@ -473,6 +324,52 @@ fn int main(String[] args)
   return 0;
 }
 
+macro invalid_instruction(...)
+{
+  logger::error("Invalid instruction %x %s %s %s %s", $vasplat, $vasplat);
+}
+
+macro @read_immr(usz $offset, BitWidth width; @body(#expr))
+{
+  switch (width)
+  {
+    case W8:
+      @body(read_imm($offset, W8));
+    case W16:
+      @body(read_imm($offset, W16));
+    case W32:
+      @body(read_imm($offset, W32));
+    case W64:
+      @body(read_imm($offset, W64));
+  }
+}
+
+macro read_imm(usz $offset, BitWidth $width)
+{
+  return mem.get(*cpu.inst_ptr + $offset, $width.size).get($width);
+}
+
+
+//*
+//  @require inst.args.count < common::MAX_INST_ARGS
+//*
+fn void move_forward(InstructionType inst, BitWidth width)
+{
+  for (usz i = 0, usz len = inst.args.count; i < len; i++)
+  {
+    switch (inst.args.arg[i])
+    {
+      case REG:
+        *cpu.inst_ptr += common::REG_SIZE;
+      case REGOFF:
+        *cpu.inst_ptr += common::REG_SIZE + common::OFF_SIZE;
+      case IMM:
+        *cpu.inst_ptr += width.size;
+    }
+  }
+}
+
+/*
 macro vm_mov(Instruction inst, BitWidth $width)
 {
   ReadResult out = read_src(inst, 0, $width);

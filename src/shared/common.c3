@@ -10,89 +10,173 @@ const MEM_SIZE = 0x02000000_0;
 // 8 General registers
 const NUM_REGISTERS = 12;
 const String[NUM_REGISTERS] REG_NAMES = {"r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "rsp", "esp", "scl", "scr"};
+const REG_SIZE = 1; // Char
+const PTR_SIZE = 8; // Long
+const OFF_SIZE = 2; // Short
 
-
-$assert(usz.sizeof == 8 && "Must be 64 bit");
+$assert(ulong.sizeof == 8 && "Must be on a 64 bit system");
 
 def InstSize = ushort;
 
-// const PTR_SIZE = 6; // 6 bytes = 281474976710655 or 256TiB of addresable memory
+// https://projectf.io/posts/riscv-cheat-sheet/
+enum InstructionType : char (String name, InstructionArgs args)
+{ // ARG1 ARG2 (SRC, DST)
+  NOP = { "NOP", args() },
 
-const OFFSET_SIZE = 6; // allows an address offset of 281474976710655. may be less with negatives
+  ADD = { "ADD", args(REG, REG) },
+  IADD = { "IADD", args(REG, REG) },
+  ADDI = { "ADDi", args(IMM, REG) },
+  IADDI = { "IADDi", args(IMM, REG) },
 
-bitstruct Instruction : InstSize @overlap
-{
-  // There can be a max of 31 instructions, 32 including 0
-  InstructionType type : 0..4;
-  BitWidth width : 5..6;
-  // 
-  Condition jif_cond : 7..8;
-  OpType src_type : 7..9;
-  OpType dst_type : 10..12;
+  SUB = { "SUB", args(REG, REG) },
+  ISUB = { "ISUB", args(REG, REG) },
+  SUBI = { "SUBi", args(IMM, REG) },
+  ISUBI = { "ISUBi", args(IMM, REG) },
 
-  bool src_type_rel : 13;
-  bool dst_type_rel : 14;
+  MUL = { "MUL", args(REG, REG) },
+  IMUL = { "IMUL", args(REG, REG) },
+  MULI = { "MULi", args(IMM, REG) },
+  IMULI = { "IMULi", args(IMM, REG) },
+
+  DIV = { "DIV", args(REG, REG) },
+  IDIV = { "IDIV", args(REG, REG) },
+  DIVI = { "DIVi", args(IMM, REG) },
+  IDIVI = { "IDIVi", args(IMM, REG) },
+
+  JMP = { "JMP", args(IMM) },
+  JMPI = { "JMPi", args(REG) },
+  AJMP = { "AJMP", args(IMM) },
+  AJMPI = { "AJMPi", args(REG) },
+
+  JEQ = { "JEQ", args(IMM) },
+  JNE = { "JNE", args(IMM) },
+  JGT = { "JGT", args(IMM) },
+  JGE = { "JGE", args(IMM) },
+  JLT = { "JLT", args(IMM) },
+  JLE = { "JLE", args(IMM) },
   
-  bool real : 15;
+
+  CMP = { "CMP", args(REG, REG) },
+  ICMP = { "ICMP", args(REG, REG) },
+  CMPI = { "CMPi", args(IMM, REG) },
+  ICMPI = { "ICMPi", args(IMM, REG) },
+
+  XOR = { "XOR", args(REG, REG) },
+  XORI = { "XORi", args(REG, IMM) },
+
+  AND = { "AND", args(REG, REG) },
+  ANDI = { "ANDi", args(IMM, REG) },
+
+  OR = { "OR", args(REG, REG) },
+  ORI = { "ORi", args(REG, IMM) },
+
+  NOT = { "NOT", args(REG, REG) },
+  NOTI = { "NOTi", args(REG, IMM) },
+
+  SLL = { "SLL", args(REG, REG) },
+  SLLI = { "SLLi", args(IMM, REG) },
+
+  SRL = { "SRL", args(REG, REG) },
+  SRLI = { "SRLi", args(IMM, REG) },
+
+  SRA = { "SRA", args(REG, REG) },
+  SRAI = { "SRAi", args(IMM, REG) },
+
+  PUSH = { "PUSH", args(REG) },
+  PUSHI = { "PUSHi", args(IMM) },
+
+  POP = { "POP", args(REG, REG) },
+  POPI = { "POPi", args(IMM, REG) },
+
+  CALL = { "CALL", args(IMM) },
+
+  LD = { "LD", args(REG, REG) },
+  LDI = { "LDi", args(IMM, REG) },
+
+  SD = { "SD", args(REG, REG) },
+  SDI = { "SDi", args(IMM, REG) },
+
+  RET = { "RET", args() },
+
+  SYSCALL = { "SYSCALL", args() },
+
+  EXIT = { "EXIT", args() },
+
+  DBG = { "DBG", args() },
+
+  PRINT = { "PRINT", args(REG) },
+  PRINTI = { "PRINTi", args(IMM) },
 }
 
-enum InstructionType : char (String name, bool sized, char args)
+enum BitWidth : char (String suffix, ulong size, typeid type)
 {
-  // Do nothing
-  NOP = { "nop", false, 0 },
-  // move PC memory address
-  JMP = { "jmp", false, 1 },
-  CMP = { "cmp", true, 2 }, // TODO: ICMP for signed comparison, possibly using flag so IADD/ISUB/IMUL/IDIV can also be added. this would likely require reducing the bits available to `type`
-  JIF = { "jif", false, 2 }, // Only takes 1 agument in the vm, as the first argument is embedded in the instruction
-  ADD = { "add", true, 2 },
-  SUB = { "sub", true, 2 },
-  CALL = { "call", false, 0 },
-  RET = { "ret", false, 0 }, // this might be a pseudo instruction
-
-  EXIT = { "exit", false, 0 },
-
-  // Both of these will cease to exist once I create a stdout device
-  PRINT = { "print", false, 1 },
-  PRINTC = { "printc", true, 0 },
-  PRINTINT = { "printint", true, 0},
-
-  MOV = { "mov", true, 2 },
-  // Temp instruction that exits the emulator
-
-  AND = { "and", true, 2 },
-  NOT = { "not", true, 1 },
-  OR = { "or", true, 2 },
-  XOR = { "xor", true, 2 },
-  PUSH = { "push", true, 1 },
-  POP = { "pop", true, 1 },
-  DBG = { "dbg", false, 0},
-  SYSCALL = { "syscall", false, 1 },
-
-  ICMP = { "icmp", true, 2 },
-  IADD = { "iadd", true, 2 },
-  ISUB = { "isub", true, 2 },
-  MUL = { "mul", true, 2 },
-  DIV = { "div", true, 2 },
-  IMUL = { "imul", true, 2 },
-  IDIV = { "idiv", true, 2 },
+//  NONE = { "", 0, void.typeid },
+  W8 = { ".8", 1, char.typeid },
+  W16 = { ".16", 2, ushort.typeid },
+  W32 = { ".32" 4, uint.typeid },
+  W64 = { ".64", 8, ulong.typeid },
 }
 
-enum BitWidth : char (inline usz size, usz bit_size, String name, typeid type)
+enum ArgType : char
 {
-  W8 = { 1, 8, "8", char.typeid },
-  W16 = { 2, 16, "16", ushort.typeid },
-  W32 = { 4, 32, "32", uint.typeid },
-  W64 = { 8, 64, "64", ulong.typeid },
-}
-
-enum OpType : char
-{
-  PTR,
-  NUM,
+//  NONE,
   REG,
-  REGPTR,
+//  REGPTR,
+  IMM,
+  REGOFF
 }
 
+const MAX_INST_ARGS = 3;
+
+struct InstructionArgs
+{
+  usz count;
+  ArgType[MAX_INST_ARGS] arg;
+}
+
+
+// If only...
+/*macro InstructionArgs args(...)
+{
+  InstructionArgs $new;
+  $for (var $i = 0; $i < $vacount; $i ++)
+    String $arg = to_string($i + 1);;
+    $new.$eval("has_arg" +++ $arg) = true;
+    $new.$eval("arg" +++ $arg) = $vaarg[i];
+  $endfor
+  return $new;
+}*/
+
+macro InstructionArgs args(...)
+{
+  ArgType[MAX_INST_ARGS] $args;
+
+  $for (var $i = 0; $i < $vacount; $i ++)
+    $args[$i] = $vaconst[$i];
+  $endfor
+
+  return {$vacount, $args};
+/*  $switch ($vacount)
+    $case 0:
+      return {};
+    $case 1:
+      return {1, {$vaconst[0], {}, {}}};
+    $case 2:
+      return {2, {$vaconst[0], $vaconst[1], {}}};
+    $case 3:
+      return {3, {$vaconst[0], $vaconst[1], $vaconst[2]}};
+    $default:
+      $error ("Unsupported arg count: " +++ to_string($vacount));
+  $endswitch*/
+}
+
+macro to_string($num) {
+  char[] $res;
+  $for (;$num != 0; $num = $num / 10)
+    $res = { (char) ('0' + $num % 10) } +++ $res;
+  $endfor
+  return (String) $res;
+}
 
 enum Condition : char
 {
@@ -102,57 +186,6 @@ enum Condition : char
   GE,
   LT,
   LE,
-}
-
-/*fn ulong char[].as_W64(self)
-{
-  char* data = self;
-  ulong new;
-  asm
-  {
-    movq [data], new;
-  };
-  return new;
-}*/
-
-macro char[].get(self, BitWidth $width) => self.$eval("as_" +++ $width.nameof)();
-
-// TODO: replace all these methods with `$switch` in `char[].as($width)`
-fn char char[].as_W8(self) => self[0];
-
-fn ushort char[].as_W16(self) => *@as(ushort*, @as(char*, char[]{self[1], self[0]}));
-
-fn uint char[].as_W32(self) => *@as(uint*, @as(char*, char[]{self[3], self[2], self[1], self[0]}));
-
-fn ulong char[].as_W64(self) => *@as(ulong*, @as(char*, char[]{self[7], self[6], 
-                                 self[5], self[4], self[3], self[2], self[1], self[0]}));
-
-macro void char[].set(self, BitWidth $width, val) => self.$eval("set_" +++ $width.nameof)(val);
-
-fn void char[].set_W8(self, char val) => self[0] = val;
-
-fn void char[].set_W16(self, ushort val)
-{
-  self[1] = @as(char, val);
-  self[0] = @as(char, val >> 8);
-}
-fn void char[].set_W32(self, uint val)
-{
-  self[3] = @as(char, val);
-  self[2] = @as(char, val >> 8);
-  self[1] = @as(char, val >> 16);
-  self[0] = @as(char, val >> 24);
-}
-fn void char[].set_W64(self, ulong val)
-{
-  self[7] = @as(char, val);
-  self[6] = @as(char, val >> 8);
-  self[5] = @as(char, val >> 16);
-  self[4] = @as(char, val >> 24);
-  self[3] = @as(char, val >> 32);
-  self[2] = @as(char, val >> 40);
-  self[1] = @as(char, val >> 48);
-  self[0] = @as(char, val >> 56);
 }
 
 // We have zig at home:
@@ -216,3 +249,59 @@ macro @profile(String name; @body()) @builtin
 }
 */
 
+//macro char[].get(self, BitWidth $width) => self.$eval("as_" +++ $width.nameof)();
+macro void char[].set(self, BitWidth $width, val) => self.$eval("set_" +++ $width.nameof)(val);
+
+module common @if(/*!*/env::X86_64);
+
+macro char[].get(self, BitWidth $width)
+{
+  $switch ($width)
+    $case W8:
+      return self[0];
+    $default:
+      return *@as($typefrom($width.type)*, @as(char*, self[0:$width.size]));
+//    $case W32:
+//      return 
+  $endswitch
+}
+
+/*// TODO: replace all these methods with `$switch` in `char[].as($width)`
+fn char char[].as_W8(self) => self[0];
+
+fn ushort char[].as_W16(self) => *@as(ushort*, @as(char*, self[0:2]));
+
+fn uint char[].as_W32(self) => *@as(uint*, @as(char*, self[0:4]));
+
+fn ulong char[].as_W64(self) => *@as(ulong*, @as(char*, self[0:8]));
+*/
+fn void char[].set_W8(self, char val) => self[0] = val;
+
+fn void char[].set_W16(self, ushort val)
+{
+  self[0] = @as(char, val);
+  self[1] = @as(char, val >> 8);
+}
+fn void char[].set_W32(self, uint val)
+{
+  self[0] = @as(char, val);
+  self[1] = @as(char, val >> 8);
+  self[2] = @as(char, val >> 16);
+  self[3] = @as(char, val >> 24);
+}
+fn void char[].set_W64(self, ulong val)
+{
+  self[0] = @as(char, val);
+  self[1] = @as(char, val >> 8);
+  self[2] = @as(char, val >> 16);
+  self[3] = @as(char, val >> 24);
+  self[4] = @as(char, val >> 32);
+  self[5] = @as(char, val >> 40);
+  self[6] = @as(char, val >> 48);
+  self[7] = @as(char, val >> 56);
+}
+
+
+/*module common @if(env::X86_64);
+
+fn char char[].get

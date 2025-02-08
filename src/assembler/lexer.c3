@@ -6,8 +6,8 @@ import logger;
 import std::io;
 import std::collections::list;
 
-def Expr = List(<Token>);
-def Prog = List(<Expr>);
+def Expr = List<[Token]>;
+def Tokens = List<[Expr]>;
 
 struct Token(Printable)
 {
@@ -34,10 +34,6 @@ enum TokenType : char
 }
 
 
-
-const String[BitWidth.elements] VALID_SUFFIXES = {"8", "16", "32", "64"};
-
-$assert(VALID_SUFFIXES[0] == BitWidth.W8.name);
 
 const char COMMENT = '#';
 
@@ -69,28 +65,22 @@ fault InstructionFault
   INCORRECT_SIZE_PREFIX,
 }
 
-List(<String>) labels;
+List<[String]> labels;
 
-fn bool! check_valid_instruction(String data)
+fn bool check_valid_instruction(String data)
 {
   logger::debug("checking inst: '%s'", data);
-  $foreach ($instruction : InstructionType.values)
-//    logger::debug("%s:%s %s:%s", data, data.len, $instruction.name, $instruction.name.len);
-    if (data.len >= $instruction.name.len && data[0:$instruction.name.len] == $instruction.name)
+  foreach (inst : InstructionType.values)
+  {
+    if (data.len >= inst.name.len && data[:inst.name.len] == inst.name)
     {
-//      logger::debug("a");
-      if ($instruction.sized == false)
+      if (data.len == inst.name.len) return true;
+      foreach (width : BitWidth.values)
       {
-//        logger::debug("b");
-        if (data.len == $instruction.name.len) return true;
-        return InstructionFault.SIZE_IN_UNSIZED_INSTRUCTION?;
+        if (data[inst.name.len..] == width.suffix) return true;
       }
-      if (data.len > $instruction.name.len + 1 && data[$instruction.name.len] == '.' && VALID_SUFFIXES[..].contains(data[$instruction.name.len+1..])) return true;
-
-      return InstructionFault.NO_SIZE_IN_SIZED_INSTRUCTION?;
     }
-  $endforeach
-  logger::debug("Not instruction :(");
+  }
   return false;
 }
 
@@ -99,13 +89,21 @@ fn bool is_valid_register(String data)
   return common::REG_NAMES[..].contains(data);
 }
 
+// there is totally not a better way to do this
+// TODO: implement actual number checking, this is probably way too slow
 fn bool is_valid_number(String data)
 {
-  if (catch err = data.to_int())
+  if (catch err = data.to_ulong())
   {
-    if (catch err2 = data.to_int(16))
+    if (catch err2 = data.to_ulong(16))
     {
-      return false;
+      if (catch err3 = data.to_long())
+      {
+        if (catch err4 = data.to_long(16))
+        {
+          return false;
+        }
+      }
     }
   }
   return true;
@@ -115,6 +113,7 @@ const String INVALID_LABEL = "0123456789.:";
 
 fn bool is_valid_label_decl(String data)
 {
+  if (data[0] != '$') return false;
   foreach (ch : data[..^2])
   {
     if (INVALID_LABEL.contains_char(ch)) return false;
@@ -124,6 +123,7 @@ fn bool is_valid_label_decl(String data)
 
 fn bool is_valid_label(String data)
 {
+  if (data[0] != '$') return false;
   foreach (ch : data)
   {
     if (INVALID_LABEL.contains_char(ch)) return false;
@@ -135,9 +135,9 @@ const String SEPERATORS = {' ', ',', '\n', '\r', '\t', '\0', ';'};
 const String EOEXPR = {';', '\n', '\r'};
 const char ARG_SEP = ',';
 
-fn Prog! lex(char[] to_lex)
+fn Tokens! lex(char[] to_lex)
 {
-  Prog lexed;
+  Tokens lexed;
   Expr expr;
 
   DString curr_tok;//.str_copy()
@@ -211,7 +211,7 @@ fn Prog! lex(char[] to_lex)
       {
         continue;
       }
-      else if (check_valid_instruction(curr_tok.str_view())!)
+      else if (check_valid_instruction(curr_tok.str_view()))
       {
         t = INSTRUCTION;
       }
