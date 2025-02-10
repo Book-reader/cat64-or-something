@@ -198,7 +198,7 @@ fn int main(String[] args)
   }
   else
   {
-    prog = x"3b00 41 3b00 0a 1403 0000000000000000 3400";//x"88e9 00000000000000ff 01 8989 01 00 88e4 0000000000000001 01 8882 00 00 8483 000000000000000b 8081 0000000000000000 800b";
+    prog = x"3b00 41 1403 0000000000000000 3400";//x"88e9 00000000000000ff 01 8989 01 00 88e4 0000000000000001 01 8882 00 00 8483 000000000000000b 8081 0000000000000000 800b";
 
         // Push test
         //x"e988 0001000000000000 08 1280 0b80";
@@ -363,6 +363,7 @@ fn void move_forward(InstructionType inst, BitWidth width)
         *cpu.inst_ptr += common::REG_SIZE;
       case REGOFF:
         *cpu.inst_ptr += common::REG_SIZE + common::OFF_SIZE;
+      case LABEL:
       case IMM:
         *cpu.inst_ptr += width.size;
     }

@@ -3,6 +3,7 @@ module common;
 import std::io;
 import std::thread;
 import std::time;
+import std::collections::list;
 
 // 16 Mib of memory
 const MEM_SIZE = 0x02000000_0;
@@ -25,23 +26,23 @@ enum InstructionType : char (String name, InstructionArgs args)
 
   ADD = { "ADD", args(REG, REG) },
   IADD = { "IADD", args(REG, REG) },
-  ADDI = { "ADDi", args(IMM, REG) },
-  IADDI = { "IADDi", args(IMM, REG) },
+  ADDI = { "ADDi", args(REG, IMM) },
+  IADDI = { "IADDi", args(REG, IMM) },
 
   SUB = { "SUB", args(REG, REG) },
   ISUB = { "ISUB", args(REG, REG) },
-  SUBI = { "SUBi", args(IMM, REG) },
-  ISUBI = { "ISUBi", args(IMM, REG) },
+  SUBI = { "SUBi", args(REG, IMM) },
+  ISUBI = { "ISUBi", args(REG, IMM) },
 
   MUL = { "MUL", args(REG, REG) },
   IMUL = { "IMUL", args(REG, REG) },
-  MULI = { "MULi", args(IMM, REG) },
-  IMULI = { "IMULi", args(IMM, REG) },
+  MULI = { "MULi", args(REG, IMM) },
+  IMULI = { "IMULi", args(REG, IMM) },
 
   DIV = { "DIV", args(REG, REG) },
   IDIV = { "IDIV", args(REG, REG) },
-  DIVI = { "DIVi", args(IMM, REG) },
-  IDIVI = { "IDIVi", args(IMM, REG) },
+  DIVI = { "DIVi", args(REG, IMM) },
+  IDIVI = { "IDIVi", args(REG, IMM) },
 
   JMP = { "JMP", args(IMM) },
   JMPI = { "JMPi", args(REG) },
@@ -58,43 +59,43 @@ enum InstructionType : char (String name, InstructionArgs args)
 
   CMP = { "CMP", args(REG, REG) },
   ICMP = { "ICMP", args(REG, REG) },
-  CMPI = { "CMPi", args(IMM, REG) },
-  ICMPI = { "ICMPi", args(IMM, REG) },
+  CMPI = { "CMPi", args(REG, IMM) },
+  ICMPI = { "ICMPi", args(REG, IMM) },
 
   XOR = { "XOR", args(REG, REG) },
-  XORI = { "XORi", args(REG, IMM) },
+  XORI = { "XORi", args(IMM, REG) },
 
   AND = { "AND", args(REG, REG) },
-  ANDI = { "ANDi", args(IMM, REG) },
+  ANDI = { "ANDi", args(REG, IMM) },
 
   OR = { "OR", args(REG, REG) },
-  ORI = { "ORi", args(REG, IMM) },
+  ORI = { "ORi", args(IMM, REG) },
 
   NOT = { "NOT", args(REG, REG) },
-  NOTI = { "NOTi", args(REG, IMM) },
+  NOTI = { "NOTi", args(IMM, REG) },
 
   SLL = { "SLL", args(REG, REG) },
-  SLLI = { "SLLi", args(IMM, REG) },
+  SLLI = { "SLLi", args(REG, IMM) },
 
   SRL = { "SRL", args(REG, REG) },
-  SRLI = { "SRLi", args(IMM, REG) },
+  SRLI = { "SRLi", args(REG, IMM) },
 
   SRA = { "SRA", args(REG, REG) },
-  SRAI = { "SRAi", args(IMM, REG) },
+  SRAI = { "SRAi", args(REG, IMM) },
 
   PUSH = { "PUSH", args(REG) },
   PUSHI = { "PUSHi", args(IMM) },
 
   POP = { "POP", args(REG, REG) },
-  POPI = { "POPi", args(IMM, REG) },
+  POPI = { "POPi", args(REG, IMM) },
 
   CALL = { "CALL", args(IMM) },
 
   LD = { "LD", args(REG, REG) },
-  LDI = { "LDi", args(IMM, REG) },
+  LDI = { "LDi", args(REG, IMM) },
 
   SD = { "SD", args(REG, REG) },
-  SDI = { "SDi", args(IMM, REG) },
+  SDI = { "SDi", args(REG, IMM) },
 
   RET = { "RET", args() },
 
@@ -123,7 +124,23 @@ enum ArgType : char
   REG,
 //  REGPTR,
   IMM,
+  LABEL,
   REGOFF
+}
+
+fn bool ArgType.valid_arg(self, Expr arg)
+{
+  switch (self)
+  {
+    case REG:
+      return arg.len() == 1 && arg[0].type == REGISTER;
+    case IMM:
+      return arg.len() == 1 && (arg[0].type == NUMBER || arg[0].type == CHAR);
+    case LABEL:
+      return arg.len() == 1 && arg[0].type == LABEL;
+    case REGOFF:
+      return arg.len() == 2 && (arg[0].type == NUMBER || arg[0].type == CHAR) && arg[1].type == REGISTER;
+  }
 }
 
 const MAX_INST_ARGS = 3;
@@ -134,6 +151,31 @@ struct InstructionArgs
   ArgType[MAX_INST_ARGS] arg;
 }
 
+def Expr = List<[Token]>;
+def Tokens = List<[Expr]>;
+
+struct Token(Printable)
+{
+  String lexme;
+  TokenType type;
+}
+
+fn usz! Token.to_format(&self, Formatter* formatter) @dynamic
+{
+  return formatter.printf("'%s':%s", self.lexme, self.type);
+}
+
+enum TokenType : char
+{
+  STRING,
+  CHAR,
+  NUMBER,
+  INSTRUCTION,
+  REGISTER,
+  LABEL,
+  ARG_SEP,
+  LABEL_DECL,
+}
 
 // If only...
 /*macro InstructionArgs args(...)

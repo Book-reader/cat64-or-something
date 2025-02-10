@@ -4,36 +4,8 @@ import common;
 import logger;
 
 import std::io;
+import std::thread;
 import std::collections::list;
-
-def Expr = List<[Token]>;
-def Tokens = List<[Expr]>;
-
-struct Token(Printable)
-{
-  String lexme;
-  TokenType type;
-}
-
-fn usz! Token.to_format(&self, Formatter* formatter) @dynamic
-{
-  return formatter.printf("'%s':%s", self.lexme, self.type);
-}
-
-enum TokenType : char
-{
-  STRING,
-  CHAR,
-  NUMBER,
-  INSTRUCTION,
-  REGISTER,
-  DEREF,
-  LABEL,
-  ARG_SEP,
-  LABEL_DECL,
-}
-
-
 
 const char COMMENT = '#';
 
@@ -95,15 +67,9 @@ fn bool is_valid_number(String data)
 {
   if (catch err = data.to_ulong())
   {
-    if (catch err2 = data.to_ulong(16))
+    if (catch err2 = data.to_long())
     {
-      if (catch err3 = data.to_long())
-      {
-        if (catch err4 = data.to_long(16))
-        {
-          return false;
-        }
-      }
+        return false;
     }
   }
   return true;
@@ -131,8 +97,8 @@ fn bool is_valid_label(String data)
   return true;
 }
 
-const String SEPERATORS = {' ', ',', '\n', '\r', '\t', '\0', ';'};
-const String EOEXPR = {';', '\n', '\r'};
+const String SEPERATORS = {' ', ',', '\n', '\t', '\0', ';'};
+const String EOEXPR = {';', '\n'};
 const char ARG_SEP = ',';
 
 fn Tokens! lex(char[] to_lex)
@@ -150,7 +116,7 @@ fn Tokens! lex(char[] to_lex)
 
     if (ch == COMMENT)
     {
-      while (to_lex[i] != '\n')
+      while (to_lex[i] != '\n' && i < to_lex.len)
       {
         i++;
       }
@@ -183,33 +149,20 @@ fn Tokens! lex(char[] to_lex)
     {
       if (curr_tok.len() != 0) logger::error("Found char in the middle of token");
       ch = to_lex[++i];
-      expr.push( { String{ch}.copy(), CHAR } );
+      expr.push( { string::new_format("%c", ch), CHAR } );
       if (to_lex[++i] != '\'') logger::error("Error on char");
       continue;
     }
 
-    if (!in_string)
-    {
-      if (ch == '[')
-      {
-        expr.push({ "[", DEREF });
-        continue;
-      }
-      else if (ch == ']')
-      {
-//        expr.push({ "]", DEREF_END });
-        continue;
-      }
-    }
-
-
     if (in_string) continue;
     if (SEPERATORS.contains_char(ch))
     {
+      logger::debug("curr tok: (%s) 0:%d", curr_tok.str_view());
+      logger::debug("curr expr: %s", expr);
       TokenType t;
       if (curr_tok.len() == 0)
       {
-        continue;
+        if (expr.len() == 0) continue;
       }
       else if (check_valid_instruction(curr_tok.str_view()))
       {
@@ -239,23 +192,30 @@ fn Tokens! lex(char[] to_lex)
       curr_tok.clear();
       if (ch == ARG_SEP)
       {
-        expr.push({ String{ ch }.copy(), ARG_SEP });
+        expr.push({ string::new_format("%c", ch), ARG_SEP });
       }
 
-     if (EOEXPR.contains_char(ch) && ((expr.len() > 1 && expr[0].type == LABEL_DECL) || (expr.len() > 0 && expr[0].type == INSTRUCTION)))
-     {
-       logger::debug("expr is: %s", expr);
-       logger::debug("eoexpr was: '%c' '%d'", ch, ch);
-       lexed.push(expr);
-       expr = {};
-     }
-
+      if (EOEXPR.contains_char(ch) && ((expr.len() > 1 && expr[0].type == LABEL_DECL) || (expr.len() > 0 && expr[0].type == INSTRUCTION)))
+      {
+        logger::debug("expr is: %s", expr);
+        logger::debug("eoexpr was: '%c' '%d'", ch, ch);
+        lexed.push(expr);
+        expr = {};
+      }
       continue;
     }
+
     
     curr_tok.append(ch);
   }
   return lexed;
 }
 
+//fn void expect()
 
+fn void lex_error(usz line, String message, ...) @noreturn
+{
+  io::eprintf("Error: [line %s] ");
+  io::eprintfn(message, $vasplat);
+  thread::exit(1);
+}
