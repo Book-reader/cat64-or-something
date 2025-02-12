@@ -128,7 +128,7 @@ enum ArgType : char
   REGOFF
 }
 
-fn bool ArgType.valid_arg(self, Expr arg)
+fn bool ArgType.valid_arg(self, Tokens arg)
 {
   switch (self)
   {
@@ -151,18 +151,22 @@ struct InstructionArgs
   ArgType[MAX_INST_ARGS] arg;
 }
 
-def Expr = List<[Token]>;
-def Tokens = List<[Expr]>;
+def Tokens = List<[Token]>;
+def Bytes = List<[char]>;
+
+// enum ParseArgType ()
 
 struct Token(Printable)
 {
-  String lexme;
   TokenType type;
+  String lexme;
+  usz line;
+  usz position;
 }
 
 fn usz! Token.to_format(&self, Formatter* formatter) @dynamic
 {
-  return formatter.printf("'%s':%s", self.lexme, self.type);
+  return formatter.printf("(%s:%s ('%s':%s))%s", self.line, self.position, self.lexme == "\n" ? "\\n" : self.lexme, self.type, self.type == EOEXPR ? "\n" : "");
 }
 
 enum TokenType : char
@@ -175,19 +179,8 @@ enum TokenType : char
   LABEL,
   ARG_SEP,
   LABEL_DECL,
+  EOEXPR,
 }
-
-// If only...
-/*macro InstructionArgs args(...)
-{
-  InstructionArgs $new;
-  $for (var $i = 0; $i < $vacount; $i ++)
-    String $arg = to_string($i + 1);;
-    $new.$eval("has_arg" +++ $arg) = true;
-    $new.$eval("arg" +++ $arg) = $vaarg[i];
-  $endfor
-  return $new;
-}*/
 
 macro InstructionArgs args(...)
 {
@@ -198,18 +191,6 @@ macro InstructionArgs args(...)
   $endfor
 
   return {$vacount, $args};
-/*  $switch ($vacount)
-    $case 0:
-      return {};
-    $case 1:
-      return {1, {$vaconst[0], {}, {}}};
-    $case 2:
-      return {2, {$vaconst[0], $vaconst[1], {}}};
-    $case 3:
-      return {3, {$vaconst[0], $vaconst[1], $vaconst[2]}};
-    $default:
-      $error ("Unsupported arg count: " +++ to_string($vacount));
-  $endswitch*/
 }
 
 macro to_string($num) {
@@ -272,29 +253,11 @@ macro @eachif_arr(value, $values, #attribute = null, $failable = true; @body($ma
   $endif
 }
 
-/*usz current_bench_depth = 0;
-macro @profile(String name; @body()) @builtin
-{
-  $if $feature(BENCH):
-    current_bench_depth += 1;
-    Clock clock = clock::now();
-    defer
-    {
-      NanoDuration nano_seconds = clock.mark();
-      io::eprint("[BENCH] ");
-      for (usz i = 0; i < current_bench_depth - 1; i++) io::eprint("-");
-      io::eprintfn("> %s took %s", name, nano_seconds);
-      current_bench_depth -= 1;
-   }
-    $endif
-  @body();
-}
-*/
 
 //macro char[].get(self, BitWidth $width) => self.$eval("as_" +++ $width.nameof)();
 macro void char[].set(self, BitWidth $width, val) => self.$eval("set_" +++ $width.nameof)(val);
 
-module common @if(/*!*/env::X86_64);
+module common /*@if(!env::X86_64)*/;
 
 macro char[].get(self, BitWidth $width)
 {
@@ -347,3 +310,27 @@ fn void char[].set_W64(self, ulong val)
 /*module common @if(env::X86_64);
 
 fn char char[].get
+
+// TODO: Test which is faster:
+fn ulong char[].get_W64(char[] self) @naked @noinline
+{
+	char* s = self;
+	asm
+	{
+		movq $rax, [s];
+		ret;
+	}
+	unreachable();
+}
+
+fn ulong char[].get_W64(char[] self) @naked @inline
+{
+	char* s = self;
+	ulong ret;
+	asm
+	{
+		movq ret, [s];
+		ret;
+	}
+	return ret;
+}

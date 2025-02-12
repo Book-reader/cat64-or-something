@@ -25,5 +25,10 @@ macro error(String msg = "(No Messsage)", ...)
 {
   io::eprintf("[ERROR] (%s:%s %s) ", $$FILE, $$LINE, $$FUNC);
   io::eprintfn(msg, $vasplat);
-  abort();
+}
+
+macro panic(String msg = "(No Message)", ...)
+{
+	error(msg, $vasplat);
+	abort();
 }

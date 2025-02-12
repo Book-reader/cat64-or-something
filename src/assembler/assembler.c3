@@ -9,7 +9,6 @@ import std::collections::list;
 import std::collections::tuple;
 
 def Prog = List<[Instruction]>;
-def Bytes = List<[char]>;
 
 struct Instruction (Printable)
 {
@@ -58,23 +57,40 @@ fn int main(String[] args)
 {
   if (args.len != 3)
   {
-    logger::info("must pass input file name and output file name");
+    logger::error("must pass input file name and output file name");
     return 1;
   }
   char[] file_data = file::load_new(args[1])!!;
-  File out_file = file::open(args[2], "wb")!!;
+  File! out_file = file::open(args[2], "wb");
+  if (catch err = out_file)
+  {
+    logger::error("Error while opening output file [%s]: %s ", args[2], err);
+	return 1;
+  }
 
   usz data_ptr = 0;
-  logger::debug("Assembling:\n---------\n%s\n---------", (String)file_data);
+  logger::debug("Assembling:");
+  logger::debug("---------------");
+  $if $feature(DEBUG):
+    io::eprintn((String)file_data);
+  $endif
+  logger::debug("---------------");
+
   Tokens! lexed = lexer::lex(file_data);
   if (catch err = lexed)
   {
     logger::error("Error while lexing tokens: %s", err);
+	return 1;
   }
 
   logger::debug("lexed: %s", lexed);
 
-  Prog prog = build(lexed);
+  Prog! prog = build(lexed);
+  if (catch err = prog)
+  {
+    logger::error("Error while parsing: %s", err);
+    return 1;
+  }
   logger::debug("built: %s", prog);
 
   Bytes generated = Bytes.new();
@@ -95,130 +111,137 @@ fn int main(String[] args)
   return 0;
 }
 
-fn Prog build(Tokens lexed)
+fault ParseError
 {
-  logger::debug("building %s", lexed);
-  Prog prog;
-
-  Instruction inst;
-  foreach (expr : lexed)
-  {
-    usz i;
-    inst.build_start(expr, &i);
-
-    inst.build_args(expr, &i);
-
-    prog.push(inst);
-    inst = {};
-  }
-
-/*  foreach (expr : lexed)
-  {
-    InstTok! tok = build_expr(expr);
-    if (catch err = tok)
-    {
-      logger::error("error in expression '%s': %s", expr, err);
-    }
-    prog.push(tok);
-  }*/
-
-  return prog;
+	EXPECTED_INSTRUCTION,
+	TOO_MANY_ARGS,
+	NOT_ENOUGH_ARGS,
+	INVALID_ARG,
+	INVALID_IMMEDIATE,
 }
 
-fn void Instruction.build_start(&self, Expr lexed, usz* idx)
+fn Prog! build(Tokens lexed)
 {
-  if (lexed[*idx].type == LABEL_DECL)
-  {
-    self.label = lexed[*idx].lexme.copy()[:^2];
-    *idx += 1;
-  }
-  if (lexed[*idx].type == INSTRUCTION)
-  {
-    String data = lexed[*idx].lexme;
-    foreach (inst : InstructionType.values)
-    {
-      if (data.len >= inst.name.len && data[:inst.name.len] == inst.name)
-      {
-        self.type = @enum_from_value(InstructionType, name, data[:inst.name.len])!!;
-        self.width = @enum_from_value(BitWidth, suffix, data[inst.name.len..]) ?? BitWidth.W64;
-      }
-    }
-  }
-  else
-  {
-    logger::error("Expected INSTRUCTION but found %s", lexed[*idx].type );
-  }
+	logger::debug("building %s", lexed);
+	Prog prog;
+
+	Instruction inst;
+	for (usz i = 0, usz len = lexed.len(); i < len; i++)
+	{
+		inst.build_start(lexed, &i)!;
+		inst.build_args(lexed, &i)!;
+		logger::debug("Inst %s", inst);
+	}
+	return prog;
 }
 
-fn void Instruction.build_args(&self, Expr lexed, usz* idx)
+fn void! Instruction.build_start(&self, Tokens lexed, usz* idx)
 {
-  Tokens args;
-  args.new_init();
-  defer args.free();
-  Expr new_arg;
-  new_arg.new_init();
-//  defer arg.free();
-  for (; *idx < lexed.len(); (*idx)++)
-  {
-    Token tok = lexed[*idx];
-    logger::debug("tok: %s", tok);
-    if (tok.type == INSTRUCTION) {}
-    else if (tok.type == ARG_SEP)
-    {
-      args.push(new_arg);
-      new_arg.new_init();
-    }
-    else
-    {
-      new_arg.push(tok);
-    }
-  }
-  args.push(new_arg);
-  logger::debug("Args: %s", args);
+	if (lexed[*idx].type == LABEL_DECL)
+	{
+		self.label = lexed[*idx].lexme.copy()[:^2];
+		*idx += 1;
+	}
+	if (lexed[*idx].type == INSTRUCTION)
+	{
+		String data = lexed[*idx].lexme;
+		foreach (inst : InstructionType.values)
+		{
+			if (data.len >= inst.name.len && data[:inst.name.len] == inst.name)
+			{
+				self.type = @enum_from_value(InstructionType, name, data[:inst.name.len])!!;
+				self.width = @enum_from_value(BitWidth, suffix, data[inst.name.len..]) ?? W64;
+			}
+		}
+		*idx += 1;
+	}
+	else
+	{
+		parse_error(lexed[*idx], "Expected INSTRUCTION but found %s", lexed[*idx].type);
+		return ParseError.EXPECTED_INSTRUCTION?;
+	}
+}
 
-  logger::debug("Before args");
+fn void! Instruction.build_args(&self, Tokens lexed, usz* idx)
+{
+	if (self.type.args.count == 0) return;
+	Tokens[common::MAX_INST_ARGS] args;
+	usz arg_idx;
 
-  foreach (i, arg : args)
-  {
-    logger::debug("In arg %s", i);
-    if (i > self.type.args.count) logger::error("Too many arguments for instruction %s (%s)", self.type.name, arg);
-    if (self.type.args.arg[i].valid_arg(arg))
-    {
-      switch (self.type.args.arg[i])
-      {
-        case REGOFF:
-          logger::error("REGOFF not implemented yet");
-          // self.args[i].as_REGOFF = { .reg = arg[0].lexme.to_uchar()!!, .off = arg[ };
-        case IMM:
-          ulong! imm = arg[0].lexme.to_ulong();
-          if (catch err = imm)
-          {
-            imm = arg[0].lexme.to_ulong(16);
-            if (catch err2 = imm)
-            {
-              logger::error("Invalid immediate: %s (%s)", err, arg[0].lexme);
-            }
-          }
-          self.args[i].as_IMM = imm!!;
-        case REG:
-          self.args[i].as_REG = @as(char, common::REG_NAMES[..].index_of(arg[0].lexme)!!);
-        case LABEL:
-          logger::error("Not Implemented: %s", self.type.args.arg[i]);
-      }
-    }
-    else
-    {
-      logger::error("Invalid arg (%s) for instruction %s", arg, self.type.name);
-    }
-  }
-  logger::debug("self after parsing args: %s", self);
+	for ARG_COLLECTOR: (; *idx < lexed.len(); *idx += 1)
+	{
+		Token tok = lexed[*idx];
+		switch (tok.type)
+		{
+			case EOEXPR:
+				break ARG_COLLECTOR;
+			case ARG_SEP:
+				arg_idx ++;
+			default:
+				args[arg_idx].push(tok);
+				if (arg_idx > self.type.args.count)
+				{
+					parse_error(tok, "Too many arguments for instruction '%s'", self.type.name);
+					return ParseError.TOO_MANY_ARGS?;
+				}
+
+		}
+	}
+	if (arg_idx + 1 < self.type.args.count)
+	{
+		parse_error(args[arg_idx][^1], "Not enough arguments for instruction '%s' args: %s", self.type.name, args[..arg_idx]);
+		return ParseError.NOT_ENOUGH_ARGS?;
+	}
+
+	foreach (i, arg : args[..arg_idx])
+	{
+		if (self.type.args.arg[i].valid_arg(arg))
+		{
+			self.build_arg(arg, i)!;
+		}
+		else
+		{
+			logger::error("arg: %s", arg);
+			parse_error(arg[0], "Invalid arg '%s' for instruction '%s'", arg, self.type.name);
+			return ParseError.INVALID_ARG?;
+		}
+	}
+}
+
+fn void! Instruction.build_arg(&self, Tokens arg, usz arg_idx)
+{
+	switch (self.type.args.arg[arg_idx])
+	{
+		case REGOFF:
+			logger::panic("REGOFF not implemented yet");
+			// self.args[i].as_REGOFF = { .reg = arg[0].lexme.to_uchar()!!, .off = arg[ };
+		case IMM:
+			ulong! imm = arg[0].lexme.to_ulong();
+			if (catch err = imm)
+			{
+				parse_error(arg[0], "Invalid immediate: %s", err);
+				return ParseError.INVALID_IMMEDIATE?;
+			}
+			self.args[arg_idx].as_IMM = imm;
+		case REG:
+			self.args[arg_idx].as_REG = @as(char, common::REG_NAMES[..].index_of(arg[0].lexme)!!);
+		case LABEL:
+			logger::panic("Not Implemented: %s", self.type.args.arg[arg_idx]);
+	}
+}
+
+
+macro parse_error(Token tok, String message, ...)
+{
+	io::eprintf("Error at %s ", tok);
+	io::eprintfn(message, $vasplat);
 }
 
 module std::collections::list(<Type>);
 
 macro List List.new(...) @operator(construct)
 {
-  List new;
-  new.new_init($vasplat);
-  return new;
+	List new;
+	new.new_init($vasplat);
+	return new;
 }

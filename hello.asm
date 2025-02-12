@@ -2,18 +2,14 @@
 # Prints "Hello, World!\n" assuming it is as 0xff in memory
 # LDi.64 r1, 0xff;
 LDi r1, 0xff # Should be equivalent
+#LDi r1, 0xff; NOP; LDi r1, 0xff # Semicolon test
 # Comment
-$loop:
+# $loop:
   LD.8 r0, r1
-#  mov.8 r0, [r1];
-#  printc.8
   PRINT.8 r0
-#  add.64 r1, 1;
   ADDi.64 r1, 1
-#  cmp.8 r0, 0
   CMPi.8 r0, 0
-#  jif 01, $loop
-  JNE $loop
+#  JNE $loop
 DBG
 EXIT
 # idx: db.8 0xff
