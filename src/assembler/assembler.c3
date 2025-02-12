@@ -20,7 +20,10 @@ struct Instruction (Printable)
 
 fn usz! Instruction.to_format(&self, Formatter* formatter) @dynamic
 {
-  usz! n = formatter.printf("%s%s:[", self.type.name, self.width.suffix);
+  usz! n;
+
+  if (self.label != "") n += formatter.printf("(%s)", self.label);
+  n += formatter.printf("%s%s:[", self.type.name, self.width.suffix);
   for (usz i = 0, usz len = self.type.args.count; i < len; i++)
   {
     n += formatter.printf("%s", self.args[i]);
@@ -143,6 +146,8 @@ fn Prog! build(Tokens lexed)
 		inst.build_start(lexed, &i)!;
 		inst.build_args(lexed, &i)!;
 		logger::debug("Inst %s", inst);
+		prog.push(inst);
+		inst = {};
 	}
 	return prog;
 }
@@ -151,8 +156,18 @@ fn void! Instruction.build_start(&self, Tokens lexed, usz* idx)
 {
 	if (lexed[*idx].type == LABEL_DECL)
 	{
-		self.label = lexed[*idx].lexme.copy()[:^2];
+		self.label = lexed[*idx].lexme.copy()[..^2];
 		*idx += 1;
+		switch (lexed[*idx].type)
+		{
+			case EOEXPR:
+				*idx += 1;
+			case INSTRUCTION:
+				break;
+			default:
+				parse_error(lexed[*idx], "Expedted INSTRUCTION or EOEXPR but found '%s'", lexed[*idx].type);
+				return ParseError.EXPECTED_INSTRUCTION?;
+		}
 	}
 	if (lexed[*idx].type == INSTRUCTION)
 	{
