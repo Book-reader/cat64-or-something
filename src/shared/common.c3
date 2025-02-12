@@ -124,23 +124,15 @@ enum ArgType : char
   REG,
 //  REGPTR,
   IMM,
-  LABEL,
   REGOFF
 }
 
-fn bool ArgType.valid_arg(self, Tokens arg)
+enum ParseArgType : char (ArgType runtime_type)
 {
-  switch (self)
-  {
-    case REG:
-      return arg.len() == 1 && arg[0].type == REGISTER;
-    case IMM:
-      return arg.len() == 1 && (arg[0].type == NUMBER || arg[0].type == CHAR);
-    case LABEL:
-      return arg.len() == 1 && arg[0].type == LABEL;
-    case REGOFF:
-      return arg.len() == 2 && (arg[0].type == NUMBER || arg[0].type == CHAR) && arg[1].type == REGISTER;
-  }
+	REG = REG,
+	IMM = IMM,
+	LABEL = IMM,
+	REGOFF = REGOFF,
 }
 
 const MAX_INST_ARGS = 3;

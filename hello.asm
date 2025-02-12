@@ -9,7 +9,7 @@ LDi r1, 0xff # Should be equivalent
   PRINT.8 r0
   ADDi.64 r1, 1
   CMPi.8 r0, 0
-#  JNE $loop
+  JNE $loop
 DBG
 EXIT
 # idx: db.8 0xff

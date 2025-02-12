@@ -12,7 +12,7 @@ def Prog = List<[Instruction]>;
 
 struct Instruction (Printable)
 {
-  ArgData[common::MAX_INST_ARGS] args;
+  ParseArgData[common::MAX_INST_ARGS] args;
   InstructionType type;
   BitWidth width;
   String label;
@@ -23,17 +23,7 @@ fn usz! Instruction.to_format(&self, Formatter* formatter) @dynamic
   usz! n = formatter.printf("%s%s:[", self.type.name, self.width.suffix);
   for (usz i = 0, usz len = self.type.args.count; i < len; i++)
   {
-    switch (self.type.args.arg[i])
-    {
-      case REG:
-        n += formatter.printf("%s", common::REG_NAMES[self.args[i].as_REG]);
-      case IMM:
-        n += formatter.printf("%s", self.args[i].as_IMM);
-      case LABEL:
-        n += formatter.printf("%s", self.args[i].as_LABEL);
-      case REGOFF:
-        n += formatter.printf("%s(%s)", self.args[i].as_REGOFF.off, common::REG_NAMES[self.args[i].as_REGOFF.reg]);
-    }
+    n += formatter.printf("%s", self.args[i]);
     if (i < len - 1) n += formatter.print(",");
   }
   n += formatter.print("]");
@@ -41,16 +31,37 @@ fn usz! Instruction.to_format(&self, Formatter* formatter) @dynamic
   return n;
 }
 
-union ArgData// (Printable)
+struct ParseArgData (Printable)
 {
-  char as_REG;
-  ulong as_IMM;
-  String as_LABEL;
-  struct as_REGOFF
-  {
-    char reg;
-    short off;
-  }
+	ParseArgType type;
+	union
+	{
+		char as_REG;
+		ulong as_IMM;
+		String as_LABEL;
+		struct as_REGOFF
+		{
+			char reg;
+			short off;
+		}
+	}
+}
+
+fn usz! ParseArgData.to_format(&self, Formatter* formatter) @dynamic
+{
+	usz! n;
+	switch (self.type)
+	{
+		case REG:
+			n += formatter.printf("%s", common::REG_NAMES[self.as_REG]);
+		case IMM:
+			n += formatter.printf("%s", self.as_IMM);
+		case LABEL:
+			n += formatter.printf("%s", self.as_LABEL);
+		case REGOFF:
+			n += formatter.printf("%s(%s)", self.as_REGOFF.off, common::REG_NAMES[self.as_REGOFF.reg]);
+	}
+	return n;
 }
 
 fn int main(String[] args)
@@ -118,6 +129,7 @@ fault ParseError
 	NOT_ENOUGH_ARGS,
 	INVALID_ARG,
 	INVALID_IMMEDIATE,
+	INCORRECT_ARG,
 }
 
 fn Prog! build(Tokens lexed)
@@ -162,10 +174,12 @@ fn void! Instruction.build_start(&self, Tokens lexed, usz* idx)
 	}
 }
 
+// If parsargtype[i].runtime_type == instruction.args[i].type && parseargtype[i].valid_arg(arg)
 fn void! Instruction.build_args(&self, Tokens lexed, usz* idx)
 {
 	if (self.type.args.count == 0) return;
 	Tokens[common::MAX_INST_ARGS] args;
+	ParseArgType[common::MAX_INST_ARGS] arg_types;
 	usz arg_idx;
 
 	for ARG_COLLECTOR: (; *idx < lexed.len(); *idx += 1)
@@ -193,24 +207,47 @@ fn void! Instruction.build_args(&self, Tokens lexed, usz* idx)
 		return ParseError.NOT_ENOUGH_ARGS?;
 	}
 
+	// Calculate the types of the args here.
 	foreach (i, arg : args[..arg_idx])
 	{
-		if (self.type.args.arg[i].valid_arg(arg))
+		ParseArgType arg_type;
+		switch
 		{
-			self.build_arg(arg, i)!;
+			case arg.len() == 1 && arg[0].type == REGISTER:
+				arg_type = REG;
+			case arg.len() == 1 && (arg[0].type == NUMBER || arg[0].type == CHAR):
+				arg_type = IMM;
+			case arg.len() == 1 && arg[0].type == LABEL:
+				arg_type = LABEL;
+			case arg.len() == 2 && (arg[0].type == NUMBER || arg[0].type == CHAR) && arg[1].type == REGISTER:
+				arg_type = REGOFF;
+			default:
+				parse_error(arg[0], "Unknown arg type '%s'. expected either REG, IMM, LABEL, or REGOFF", arg);
+				return ParseError.INVALID_ARG?;
+		}
+		arg_types[i] = arg_type;
+	}
+
+	// Then compare the types against the expected types here
+	foreach (i, arg : args[..arg_idx])
+	{
+		if (self.type.args.arg[i] == arg_types[i].runtime_type)
+		{
+			self.build_arg(arg, arg_types[i], i)!;
 		}
 		else
 		{
 			logger::error("arg: %s", arg);
-			parse_error(arg[0], "Invalid arg '%s' for instruction '%s'", arg, self.type.name);
-			return ParseError.INVALID_ARG?;
+			parse_error(arg[0], "expected arg type '%s' but found '%s'", self.type.args.arg[i], arg_types[i]);
+			return ParseError.INCORRECT_ARG?;
 		}
 	}
 }
 
-fn void! Instruction.build_arg(&self, Tokens arg, usz arg_idx)
+fn void! Instruction.build_arg(&self, Tokens arg, ParseArgType arg_type, usz arg_idx)
 {
-	switch (self.type.args.arg[arg_idx])
+	self.args[arg_idx].type = arg_type;
+	switch (arg_type)
 	{
 		case REGOFF:
 			logger::panic("REGOFF not implemented yet");
@@ -226,7 +263,7 @@ fn void! Instruction.build_arg(&self, Tokens arg, usz arg_idx)
 		case REG:
 			self.args[arg_idx].as_REG = @as(char, common::REG_NAMES[..].index_of(arg[0].lexme)!!);
 		case LABEL:
-			logger::panic("Not Implemented: %s", self.type.args.arg[arg_idx]);
+			self.args[arg_idx].as_LABEL = arg[0].lexme;
 	}
 }
 
