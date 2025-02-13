@@ -270,7 +270,7 @@ macro @eachif_arr(value, $values, #attribute = null, $failable = true; @body($ma
 macro void char[].set(self, BitWidth $width, val) => self.$eval("set_" +++ $width.nameof)(val);
 
 module common /*@if(!env::X86_64)*/;
-
+import logger;
 macro char[].get(self, BitWidth $width)
 {
   $switch ($width)
@@ -281,6 +281,7 @@ macro char[].get(self, BitWidth $width)
       $for (var $i = 0; $i < $width; $i++)
        data[$i] = self[$i];
       $endfor
+      logger::debug("reading value %s from %s", @as($typefrom($width.itype), *@as($typefrom($width.type)*, @as(char*, data))), data);
       return *@as($typefrom($width.type)*, @as(char*, data));//*(@as($typefrom($width.type)*, @as(char*, self[:$width]));
 //    $case W32:
 //      return 

@@ -330,11 +330,12 @@ fn int main(String[] args)
 			case ADDI:
 				@read_immr(1, width; BitWidth $width, #val)
 				{
-//					$echo($width.nameof);
-//					$echo($typefrom($width.itype).nameof);
-//					$echo($typeof(read_reg(0, $width)).nameof);
-//					$echo($typeof(#val).nameof);
 					write_reg(0, $width, @as($typefrom($width.type), read_reg(0, $width) + #val));
+				};
+			case SUBI:
+				@each_width(width; BitWidth $width)
+				{
+					write_reg(0, $width, @as($typefrom($width.type), read_reg(0, $width) - read_imm(1, $width)));
 				};
 			case CMPI:
 				@read_immr(1, width; BitWidth $width, #src)
@@ -354,7 +355,7 @@ fn int main(String[] args)
 					logger::debug("JNE true");
 					usz old = *cpu.inst_ptr;
 					*cpu.inst_ptr += (isz)read_imm(0, W64);
-					logger::debug("JMPing from %s to %s", old, *cpu.inst_ptr);
+					logger::debug("JMPing from %s to %s, difference of %s", old, *cpu.inst_ptr, @as(isz, *cpu.inst_ptr - old));
 					continue;
 				}
 				else
@@ -404,7 +405,7 @@ macro void @each_width(BitWidth width; @body(BitWidth $width))
 	}
 }
 
-macro void @read_immr(usz $offset, BitWidth width; @body(BitWidth $width, #expr))
+macro void @read_immr(usz $offset, BitWidth width; @body(BitWidth $width, #expr)) @deprecated("Use @each_width with read_imm")
 {
 	switch (width)
 	{
