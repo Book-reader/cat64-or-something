@@ -14,7 +14,7 @@ fault CodeGenError
 fn usz Instruction.calculate_offset(self, Prog* prog, usz own_idx)
 {
 	usz offset;
-	foreach (inst : prog.array_view()[:own_idx])
+	foreach (inst : prog.array_view()[..own_idx])
 	{
 		offset += inst.get_size();
 	}
@@ -23,7 +23,7 @@ fn usz Instruction.calculate_offset(self, Prog* prog, usz own_idx)
 
 fn usz Instruction.get_size(self)
 {
-	usz size;
+	usz size = 2;
 	foreach (arg : self.args[:self.type.args.count])
 	{
 		switch (arg.type)
