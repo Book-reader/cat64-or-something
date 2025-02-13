@@ -7,7 +7,9 @@ LDi r1, 0xff # Should be equivalent
 $loop:
   LD.8 r0, r1
   PRINT.8 r0
+#  DBG
   ADDi r1, 1
+#  DBG
   CMPi.8 r0, 0
   JNE $loop
 DBG

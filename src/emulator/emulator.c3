@@ -257,14 +257,16 @@ fn int main(String[] args)
 			}
 //			if (iteration % 5000000 == 0) io::printfn("CPU Cycle: %s", iteration);
 		$endif
+
+		logger::debug("inst: %s", mem.get(*cpu.inst_ptr, 2));
 		// Fetch, Decode, Execute
 		// https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#fetchdecodeexecute-loop
-		char inst_code = mem.get(*cpu.inst_ptr, 2).get(W8);
+		char inst_code = mem.get(*cpu.inst_ptr, 1).get(W8);
 		if (inst_code > InstructionType.elements - 1) invalid_instruction(inst_code);
 		InstructionType inst = InstructionType.from_ordinal(inst_code);
 
-		char width_code = mem.get(*cpu.inst_ptr + 1, 2).get(W8);
-		if (width_code > InstructionType.elements - 1) invalid_instruction(width_code);
+		char width_code = mem.get(*cpu.inst_ptr + 1, 1).get(W8);
+		if (width_code > BitWidth.elements - 1) invalid_instruction(width_code);
 		BitWidth width = BitWidth.from_ordinal(width_code);
 
 
@@ -296,7 +298,7 @@ fn int main(String[] args)
 				io::printf("%c", read_imm(0, W8));
 				//@volatile_load(*&&read_imm(0, W8));
 			case AJMPI:
-				@read_immr(0, W8; #val)
+				@read_immr(0, width; BitWidth $width, #val)
 				{
 					*cpu.inst_ptr = #val;
 				};
@@ -305,6 +307,59 @@ fn int main(String[] args)
 				foreach (i, reg : cpu.regs)
 				{
 					logger::info("%s: %.16x", common::REG_NAMES[i], reg);
+				}
+			case LDI:
+				@read_immr(1, width; BitWidth $width, #val)
+				{
+					write_reg(0, $width, #val);
+				};
+			case LD:
+				@each_width(width; BitWidth $width)
+				{
+					//logger::debug("LD: '%s' <- '%s' ('%s' -> '%h')", read_imm(0, W8), read_reg(1), cpu.regs[read_reg(1)], mem.get(cpu.regs[read_reg(1)], $width));
+					write_reg(0, $width, mem.get(read_reg(1, W64), $width).get($width));
+				};
+			case PRINT:
+				if (width != W8)
+				{
+					logger::error("Only 8-bit PRINT implemented");
+					return 1;
+				}
+				logger::debug("Printing char '%c' (0x%x %s)", read_reg(0, W8), read_reg(0, W8), read_reg(0, W8));
+				io::printf("%c", read_reg(0, W8));
+			case ADDI:
+				@read_immr(1, width; BitWidth $width, #val)
+				{
+//					$echo($width.nameof);
+//					$echo($typefrom($width.itype).nameof);
+//					$echo($typeof(read_reg(0, $width)).nameof);
+//					$echo($typeof(#val).nameof);
+					write_reg(0, $width, @as($typefrom($width.type), read_reg(0, $width) + #val));
+				};
+			case CMPI:
+				@read_immr(1, width; BitWidth $width, #src)
+				{
+					logger::debug("Comparing value %s with value in register %s (%s)", @as(isz, #src), read_imm(0, W8), read_reg(0, $width));
+					$typefrom($width.itype) src = ($typefrom($width.itype))#src;
+					$typefrom($width.itype) dst = read_reg(0, $width);
+					logger::debug("src: %s, dst: %s", src, dst);
+					cpu.f_zero = src == dst;
+					cpu.f_carry = src > dst;
+				};
+//				cpu.f_zero = src.get($width) == dst.get($width);
+//				cpu.f_carry = src.get($width) > dst.get($width);
+			case JNE:
+				if (!cpu.f_zero)
+				{
+					logger::debug("JNE true");
+					usz old = *cpu.inst_ptr;
+					*cpu.inst_ptr += (isz)read_imm(0, W64);
+					logger::debug("JMPing from %s to %s", old, *cpu.inst_ptr);
+					continue;
+				}
+				else
+				{
+					logger::debug("JNE false");
 				}
 			case EXIT:
 				running = false;
@@ -334,18 +389,33 @@ macro invalid_instruction(...)
 	logger::panic("Invalid instruction %x %s %s %s %s", $vasplat, $vasplat);
 }
 
-macro @read_immr(usz $offset, BitWidth width; @body(#expr))
+macro void @each_width(BitWidth width; @body(BitWidth $width))
 {
 	switch (width)
 	{
 		case W8:
-			@body(read_imm($offset, W8));
+			@body(W8);
 		case W16:
-			@body(read_imm($offset, W16));
+			@body(W16);
 		case W32:
-			@body(read_imm($offset, W32));
+			@body(W32);
 		case W64:
-			@body(read_imm($offset, W64));
+			@body(W64);
+	}
+}
+
+macro void @read_immr(usz $offset, BitWidth width; @body(BitWidth $width, #expr))
+{
+	switch (width)
+	{
+		case W8:
+			@body(W8, read_imm($offset, W8));
+		case W16:
+			@body(W16, read_imm($offset, W16));
+		case W32:
+			@body(W32, read_imm($offset, W32));
+		case W64:
+			@body(W64, read_imm($offset, W64));
 	}
 }
 
@@ -354,6 +424,15 @@ macro read_imm(usz $offset, BitWidth $width)
 	return mem.get(*cpu.inst_ptr + $offset, $width.size).get($width);
 }
 
+macro void write_reg(usz offset, BitWidth $width, value)
+{
+	cpu.regs[mem.get(*cpu.inst_ptr + offset, 1).get(W8)].write($width, value);
+}
+
+macro read_reg(usz offset, BitWidth $width)
+{
+	return cpu.regs[mem.get(*cpu.inst_ptr + offset, 1).get(W8)].read($width);
+}
 
 //*
 //	@require inst.args.count < common::MAX_INST_ARGS

@@ -113,13 +113,13 @@ enum InstructionType : char (String name, InstructionArgs args)
   PRINTINT = { "PRINTINT", args(REG) },
 }
 
-enum BitWidth : char (String suffix, inline ulong size, typeid type)
+enum BitWidth : char (String suffix, inline ulong size, typeid type, typeid itype)
 {
 //  NONE = { "", 0, void.typeid },
-  W8 = { ".8", 1, char.typeid },
-  W16 = { ".16", 2, ushort.typeid },
-  W32 = { ".32" 4, uint.typeid },
-  W64 = { ".64", 8, ulong.typeid },
+  W8 = { ".8", 1, char.typeid, ichar.typeid },
+  W16 = { ".16", 2, ushort.typeid, short.typeid },
+  W32 = { ".32" 4, uint.typeid, int.typeid },
+  W64 = { ".64", 8, ulong.typeid, long.typeid },
 }
 
 enum ArgType : char
@@ -277,7 +277,11 @@ macro char[].get(self, BitWidth $width)
     $case W8:
       return self[0];
     $default:
-      return *@as($typefrom($width.type)*, @as(char*, self[0:$width.size]));
+      char[] data = {0, 0, 0, 0, 0, 0, 0, 0};
+      $for (var $i = 0; $i < $width; $i++)
+       data[$i] = self[$i];
+      $endfor
+      return *@as($typefrom($width.type)*, @as(char*, data));//*(@as($typefrom($width.type)*, @as(char*, self[:$width]));
 //    $case W32:
 //      return 
   $endswitch
