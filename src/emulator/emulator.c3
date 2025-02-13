@@ -287,7 +287,11 @@ fn int main(String[] args)
     switch (inst)
     {
       case PRINTI:
-        if (width != W8) logger::error("Only 8-bit PRINTi implemented");
+        if (width != W8)
+        {
+          logger::error("Only 8-bit PRINTi implemented");
+          return 1;
+        }
         logger::debug("Printing char '%c' (0x%x %s)", read_imm(0, W8), read_imm(0, W8), read_imm(0, W8));
         io::printf("%c", read_imm(0, W8));
         //@volatile_load(*&&read_imm(0, W8));
@@ -309,6 +313,7 @@ fn int main(String[] args)
         break;
       default:
         logger::error("Instruction %s not implemented yet", inst);
+        return 1;
     }
     // TODO: set a clock speed
     $if $feature(DELAY):
@@ -326,7 +331,7 @@ fn int main(String[] args)
 
 macro invalid_instruction(...)
 {
-  logger::error("Invalid instruction %x %s %s %s %s", $vasplat, $vasplat);
+  logger::panic("Invalid instruction %x %s %s %s %s", $vasplat, $vasplat);
 }
 
 macro @read_immr(usz $offset, BitWidth width; @body(#expr))
