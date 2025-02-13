@@ -14,7 +14,7 @@ fault CodeGenError
 fn usz Instruction.calculate_offset(self, Prog* prog, usz own_idx)
 {
 	usz offset;
-	foreach (inst : prog.array_view()[..own_idx])
+	foreach (inst : prog.array_view()[:own_idx])
 	{
 		offset += inst.get_size();
 	}
@@ -47,7 +47,7 @@ fn isz! Instruction.resolve_label_offset(self, Prog* prog, usz own_idx, String l
 	{
 		if (inst.label == label_name)
 		{
-			return self.calculate_offset(prog, own_idx) - inst.calculate_offset(prog, own_idx);
+			return inst.calculate_offset(prog, i) - self.calculate_offset(prog, own_idx);
 		}
 	}
 	codegen_error(self, "Label '%s' not found", label_name);
