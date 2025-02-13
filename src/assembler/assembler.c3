@@ -3,6 +3,7 @@ module assembler;
 import common;
 import parser;
 import lexer;
+import codegen;
 import logger;
 
 import std::io;
@@ -36,6 +37,7 @@ fn int main(String[] args)
     logger::error("Error while lexing tokens: %s", err);
 	return 1;
   }
+  defer lexed.free();
 
   logger::debug("lexed: %s", lexed);
 
@@ -45,10 +47,18 @@ fn int main(String[] args)
     logger::error("Error while parsing: %s", err);
     return 1;
   }
+  defer prog.free();
   logger::debug("built: %s", prog);
 
-  Bytes generated = Bytes.new();
  // foreach (i, tok : prog) generated.add_all(&&tok.to_bytes(&prog, i));
+
+  Bytes! generated = codegen::generate(prog);
+  if (catch err = generated)
+  {
+    logger::error("Error during generation: %s", err);
+    return 1;
+  }
+  defer generated.free();
 
   $if $feature(DEBUG):
     logger::debug("generated:");
@@ -65,11 +75,113 @@ fn int main(String[] args)
   return 0;
 }
 
-module std::collections::list(<Type>);
+module codegen;
 
-macro List List.new(...) @operator(construct)
+import common;
+import logger;
+import parser;
+
+import std::io;
+
+fault CodeGenError
 {
-	List new;
-	new.new_init($vasplat);
-	return new;
+	LABEL_NOT_FOUND,
 }
+
+fn usz Instruction.calculate_offset(self, Prog* prog, usz own_idx)
+{
+	usz offset;
+	foreach (inst : prog.array_view()[..own_idx])
+	{
+		offset += inst.get_size();
+	}
+	return offset;
+}
+
+fn usz Instruction.get_size(self)
+{
+	usz size;
+	foreach (arg : self.args[:self.type.args.count])
+	{
+		switch (arg.type)
+		{
+			case IMM:
+				size += self.width;
+			case REG:
+				size += 1;
+			case LABEL:
+				size += BitWidth.W64;
+			default:
+				logger::panic("a: %s", arg.type);
+		}
+		//size +=
+		//logger::debug("%s", arg);
+	}
+	return size;
+}
+
+fn isz! Instruction.resolve_label_offset(self, Prog* prog, usz own_idx, String label_name)
+{
+	foreach (i, inst : prog)
+	{
+		if (inst.label == label_name)
+		{
+			return self.calculate_offset(prog, own_idx) - inst.calculate_offset(prog, own_idx);
+		}
+	}
+	codegen_error(self, "Label '%s' not found", label_name);
+	return CodeGenError.LABEL_NOT_FOUND?;
+}
+
+fn Bytes! Instruction.to_bytes(self, Prog* prog, usz own_idx)
+{
+	Bytes b;
+	b.temp_init();
+	b.push(self.type.ordinal);
+	b.push(self.width.ordinal);
+	foreach (arg : self.args)
+	{
+		logger::debug("%s", arg);
+		switch (arg.type)
+		{
+			case REG:
+				b.push(arg.as_REG);
+			case IMM:
+				@eachif(self.width; $width)
+				{
+					char[$width] buf;
+					buf[..].set($width, @as($typefrom($width.type), arg.as_IMM));
+					b.add_array(&buf);
+				};
+			case LABEL:
+				char[BitWidth.W64] buf;
+				buf[..].set(W64, self.resolve_label_offset(prog, own_idx, arg.as_LABEL)!);
+				b.add_array(&buf);
+			default:
+				logger::panic("%s not implented yet", arg.type);
+		}
+	}
+//	logger::panic("Not implemented");
+	return b;
+}
+
+fn Bytes! generate(Prog prog)
+{
+	Bytes bytes;
+	bytes.new_init();
+
+	foreach (i, inst : prog) @pool()
+	{
+		Bytes b = inst.to_bytes(&prog, i)!;
+		bytes.add_all(&b);
+	};
+
+	return bytes;
+}
+
+macro codegen_error(Instruction inst, String message, ...)
+{
+	io::eprintf("Error on instruction '%s'", inst);
+	io::eprintfn(message, $vasplat);
+}
+

@@ -113,7 +113,7 @@ enum InstructionType : char (String name, InstructionArgs args)
   PRINTINT = { "PRINTINT", args(REG) },
 }
 
-enum BitWidth : char (String suffix, ulong size, typeid type)
+enum BitWidth : char (String suffix, inline ulong size, typeid type)
 {
 //  NONE = { "", 0, void.typeid },
   W8 = { ".8", 1, char.typeid },
@@ -149,6 +149,7 @@ struct InstructionArgs
 
 def Tokens = List<[Token]>;
 def Bytes = List<[char]>;
+
 
 // enum ParseArgType ()
 
@@ -206,6 +207,21 @@ enum Condition : char
   LT,
   LE,
 }
+
+fn bool String[].contains(&self, String pointer)
+{
+	return @ok(self.index_of(pointer));
+}
+
+fn usz! String[].index_of(&self, String pointer)
+{
+	foreach (i, val : self)
+	{
+		if (val == pointer) return i;
+	}
+	return SearchResult.MISSING?;
+}
+
 
 // We have zig at home:
 macro @as($Type, #expr) @builtin => ($Type)(#expr);

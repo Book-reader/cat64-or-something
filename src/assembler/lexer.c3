@@ -9,21 +9,6 @@ import std::collections::list;
 
 const char COMMENT = '#';
 
-fn bool String[].contains(&self, String pointer)
-{
-	return @ok(self.index_of(pointer));
-}
-
-fn usz! String[].index_of(&self, String pointer)
-{
-	foreach (i, val : self)
-	{
-		if (val == pointer) return i;
-	}
-	return SearchResult.MISSING?;
-}
-
-
 fn bool String.contains_char(s, char needle)
 {
 	return @ok(s.index_of_char(needle));

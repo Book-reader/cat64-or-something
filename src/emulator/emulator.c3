@@ -363,7 +363,6 @@ fn void move_forward(InstructionType inst, BitWidth width)
         *cpu.inst_ptr += common::REG_SIZE;
       case REGOFF:
         *cpu.inst_ptr += common::REG_SIZE + common::OFF_SIZE;
-      case LABEL:
       case IMM:
         *cpu.inst_ptr += width.size;
     }
