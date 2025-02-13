@@ -1,125 +1,18 @@
-mov.64 r0, 0
-mov.64 r1, 1
-mov.64 r3, 10
-# dbg
-loop:
-    mov.64 r2, r0
-#    dbg
-    add.64 r2, r1
-#    dbg
-    mov.64 r0, r1
-#    dbg
-    mov.64 r1, r2
-#    dbg
-#    sub.64 r3, 1
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-    mov.64 r2, r0
-    add.64 r2, r1
-    mov.64 r0, r1
-    mov.64 r1, r2
-    dbg
-    printint.64
-#    jmp loop
-#    cmp.64 r3, 0
-#    exit
-#    jif 01, loop
+LDi r0, 0
+LDi r1, 1
+LDi r3, 10
+$loop:
+	MOV r2, r0
+	ADD r2, r1
+	MOV r0, r1
+	MOV r1, r2
+
+	SUBi r3, 1
+
+	DBG
+	PRINTINT r0
+	CMPi r3, 0
+	JGT $loop
 
 
-exit
+EXIT

@@ -4,7 +4,7 @@
 LDi r1, 0xff # Should be equivalent
 #LDi r1, 0xff; NOP; LDi r1, 0xff # Semicolon test
 # Comment
- $loop:
+$loop:
   LD.8 r0, r1
   PRINT.8 r0
   ADDi.64 r1, 1

@@ -29,6 +29,8 @@ enum InstructionType : char (String name, InstructionArgs args)
   ADDI = { "ADDi", args(REG, IMM) },
   IADDI = { "IADDi", args(REG, IMM) },
 
+  MOV = { "MOV", args(REG, REG) },
+
   SUB = { "SUB", args(REG, REG) },
   ISUB = { "ISUB", args(REG, REG) },
   SUBI = { "SUBi", args(REG, IMM) },
@@ -107,6 +109,8 @@ enum InstructionType : char (String name, InstructionArgs args)
 
   PRINT = { "PRINT", args(REG) },
   PRINTI = { "PRINTi", args(IMM) },
+
+  PRINTINT = { "PRINTINT", args(REG) },
 }
 
 enum BitWidth : char (String suffix, ulong size, typeid type)
