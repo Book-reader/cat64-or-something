@@ -60,9 +60,10 @@ fn Bytes! Instruction.to_bytes(self, Prog* prog, usz own_idx)
 	b.temp_init();
 	b.push(self.type.ordinal);
 	b.push(self.width.ordinal);
-	foreach (arg : self.args)
+	foreach (arg : self.args[:self.type.args.count])
 	{
 		logger::debug("%s", arg);
+		logger::debug("before: %s", b);
 		switch (arg.type)
 		{
 			case REG:
@@ -72,7 +73,8 @@ fn Bytes! Instruction.to_bytes(self, Prog* prog, usz own_idx)
 				{
 					char[$width] buf;
 					buf[..].set($width, @as($typefrom($width.type), arg.as_IMM));
-					b.add_array(&buf);
+					logger::debug("%s: %s", $width, buf);
+					b.add_array(buf[..]);
 				};
 			case LABEL:
 				char[BitWidth.W64] buf;
@@ -81,6 +83,7 @@ fn Bytes! Instruction.to_bytes(self, Prog* prog, usz own_idx)
 			default:
 				logger::panic("%s not implented yet", arg.type);
 		}
+		logger::debug("after:  %s", b);
 	}
 	return b;
 }
