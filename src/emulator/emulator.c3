@@ -344,8 +344,8 @@ fn int main(String[] args)
 					$typefrom($width.itype) src = ($typefrom($width.itype))#src;
 					$typefrom($width.itype) dst = read_reg(0, $width);
 					logger::debug("src: %s, dst: %s", src, dst);
-					cpu.f_zero = src == dst;
-					cpu.f_carry = src > dst;
+					cpu.f_zero = dst == src;
+					cpu.f_carry =dst > src;
 				};
 //				cpu.f_zero = src.get($width) == dst.get($width);
 //				cpu.f_carry = src.get($width) > dst.get($width);
@@ -362,6 +362,29 @@ fn int main(String[] args)
 				{
 					logger::debug("JNE false");
 				}
+			case JGT:
+				if (cpu.f_carry)
+				{
+					usz old = *cpu.inst_ptr;
+					*cpu.inst_ptr += (isz)read_imm(0, W64);
+					logger::debug("JMPing from %s to %s, difference of %s", old, *cpu.inst_ptr, @as(isz, *cpu.inst_ptr - old));
+					continue;
+				}
+			case MOV:
+				@each_width(width; BitWidth $width)
+				{
+					write_reg(0, $width, read_reg(1, $width));
+				};
+			case ADD:
+				@each_width(width; BitWidth $width)
+				{
+					write_reg(0, $width, @as($typefrom($width.type), read_reg(0, $width) + read_reg(1, $width)));
+				};
+			case PRINTINT:
+				@each_width(width; BitWidth $width)
+				{
+					io::printf("%d", read_reg(0, $width));
+				};
 			case EXIT:
 				running = false;
 				continue;
@@ -403,6 +426,15 @@ macro void @each_width(BitWidth width; @body(BitWidth $width))
 		case W64:
 			@body(W64);
 	}
+}
+
+macro @as_width(BitWidth $width, #expr, bool $signed = false)
+{
+	$if $signed:
+		return @as($typefrom($width.itype), #expr);
+	$else
+		return @as($typefrom($width.type), #expr);
+	$endif
 }
 
 macro void @read_immr(usz $offset, BitWidth width; @body(BitWidth $width, #expr)) @deprecated("Use @each_width with read_imm")

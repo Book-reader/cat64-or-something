@@ -1,6 +1,7 @@
+$forever:
 LDi r0, 0
 LDi r1, 1
-LDi r3, 10
+LDi r3, 90
 $loop:
 	MOV r2, r0
 	ADD r2, r1
@@ -9,10 +10,11 @@ $loop:
 
 	SUBi r3, 1
 
-	DBG
 	PRINTINT r0
+	PRINTi.8 10
 	CMPi r3, 0
 	JGT $loop
 
+JMP $forever
 
 EXIT
