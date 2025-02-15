@@ -6,7 +6,7 @@ import logger;
 import std::io;
 import std::collections::list;
 
-def Prog = List<[Instruction]>;
+def Prog = List(<Instruction>);
 
 fault ParseError
 {

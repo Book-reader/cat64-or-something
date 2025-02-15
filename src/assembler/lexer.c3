@@ -22,7 +22,7 @@ fault InstructionFault
 	INCORRECT_SIZE_PREFIX,
 }
 
-List<[String]> labels;
+List(<String>) labels;
 
 fn bool check_valid_instruction(String data)
 {

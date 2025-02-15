@@ -49,7 +49,6 @@ enum InstructionType : char (String name, InstructionArgs args)
   JMP = { "JMP", args(IMM) },
   JMPI = { "JMPi", args(REG) },
   AJMP = { "AJMP", args(IMM) },
-  AJMPI = { "AJMPi", args(REG) },
 
   JEQ = { "JEQ", args(IMM) },
   JNE = { "JNE", args(IMM) },
@@ -84,6 +83,9 @@ enum InstructionType : char (String name, InstructionArgs args)
 
   SRA = { "SRA", args(REG, REG) },
   SRAI = { "SRAi", args(REG, IMM) },
+
+  BSE = { "BSE", args(REG, IMM) },
+  BUS = { "BUS", args(REG, IMM) },
 
   PUSH = { "PUSH", args(REG) },
   PUSHI = { "PUSHi", args(IMM) },
@@ -147,8 +149,8 @@ struct InstructionArgs
   ArgType[MAX_INST_ARGS] arg;
 }
 
-def Tokens = List<[Token]>;
-def Bytes = List<[char]>;
+def Tokens = List(<Token>);
+def Bytes = List(<char>);
 
 
 // enum ParseArgType ()
@@ -278,9 +280,10 @@ macro char[].get(self, BitWidth $width)
       return self[0];
     $default:
       char[] data = {0, 0, 0, 0, 0, 0, 0, 0};
-      $for (var $i = 0; $i < $width; $i++)
-       data[$i] = self[$i];
-      $endfor
+      //$for (var $i = 0; $i < $width; $i++)
+      // data[$i] = self[$i];
+      //$endfor
+      data[:$width] = self[:$width];
       logger::debug("reading value %s from %s", @as($typefrom($width.itype), *@as($typefrom($width.type)*, @as(char*, data))), data);
       return *@as($typefrom($width.type)*, @as(char*, data));//*(@as($typefrom($width.type)*, @as(char*, self[:$width]));
 //    $case W32:

@@ -1,3 +1,4 @@
+$forever:
 LDi r0, 0
 LDi r1, 1
 LDi r3, 90
@@ -13,5 +14,7 @@ $loop:
 	PRINTi.8 10
 	CMPi r3, 0
 	JGT $loop
+
+JMP $forever
 
 EXIT
