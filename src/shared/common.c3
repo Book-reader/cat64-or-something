@@ -4,6 +4,7 @@ import std::io;
 import std::thread;
 import std::time;
 import std::collections::list;
+import logger;
 
 // 16 Mib of memory
 const MEM_SIZE = 0x02000000_0;
@@ -28,8 +29,6 @@ enum InstructionType : char (String name, InstructionArgs args)
   IADD = { "IADD", args(REG, REG) },
   ADDI = { "ADDi", args(REG, IMM) },
   IADDI = { "IADDi", args(REG, IMM) },
-
-  MOV = { "MOV", args(REG, REG) },
 
   SUB = { "SUB", args(REG, REG) },
   ISUB = { "ISUB", args(REG, REG) },
@@ -56,7 +55,6 @@ enum InstructionType : char (String name, InstructionArgs args)
   JGE = { "JGE", args(IMM) },
   JLT = { "JLT", args(IMM) },
   JLE = { "JLE", args(IMM) },
-  
 
   CMP = { "CMP", args(REG, REG) },
   ICMP = { "ICMP", args(REG, REG) },
@@ -100,6 +98,8 @@ enum InstructionType : char (String name, InstructionArgs args)
 
   SD = { "SD", args(REG, REG) },
   SDI = { "SDi", args(REG, IMM) },
+
+  MOV = { "MOV", args(REG, REG) },
 
   RET = { "RET", args() },
 
@@ -269,10 +269,13 @@ macro @eachif_arr(value, $values, #attribute = null, $failable = true; @body($ma
 
 
 //macro char[].get(self, BitWidth $width) => self.$eval("as_" +++ $width.nameof)();
-macro void char[].set(self, BitWidth $width, val) => self.$eval("set_" +++ $width.nameof)(val);
+<*
+ @require values::@is_int(val) && !$defined(*val)
+ @require $typeof(val).typeid == $width.type ||| $typeof(val).typeid == $width.itype
+*>
+macro void char[].set(self, BitWidth $width, val) => self[:$width] = @as(char*, &val)[:$width];
+//self.$eval("set_" +++ $width.nameof)(val);
 
-module common /*@if(!env::X86_64)*/;
-import logger;
 macro char[].get(self, BitWidth $width)
 {
   $switch ($width)
@@ -300,6 +303,10 @@ fn uint char[].as_W32(self) => *@as(uint*, @as(char*, self[0:4]));
 
 fn ulong char[].as_W64(self) => *@as(ulong*, @as(char*, self[0:8]));
 */
+
+module common;// @if(!env::X86_64);
+
+/*
 fn void char[].set_W8(self, char val) => self[0] = val;
 
 fn void char[].set_W16(self, ushort val)
@@ -314,7 +321,8 @@ fn void char[].set_W32(self, uint val)
   self[2] = @as(char, val >> 16);
   self[3] = @as(char, val >> 24);
 }
-fn void char[].set_W64(self, ulong val)
+
+/*fn void char[].set_W64(self, ulong val)
 {
   self[0] = @as(char, val);
   self[1] = @as(char, val >> 8);
@@ -324,11 +332,16 @@ fn void char[].set_W64(self, ulong val)
   self[5] = @as(char, val >> 40);
   self[6] = @as(char, val >> 48);
   self[7] = @as(char, val >> 56);
-}
+}*/
+fn void char[].set_W64(self, ulong val)
+{
+	self[:BitWidth.W64] = @as(char*, &val)[:BitWidth.W64];
+}*/
+
+module common @if(false);// @if(env::X86_64);
 
 
-/*module common @if(env::X86_64);
-
+/*
 fn char char[].get
 
 // TODO: Test which is faster:
@@ -353,4 +366,14 @@ fn ulong char[].get_W64(char[] self) @naked @inline
 		ret;
 	}
 	return ret;
+}*/
+
+fn void char[].set_W64(self, ulong val)
+{
+	char* s = self;
+	asm
+	{
+		movq [s], val;
+	}
 }
+

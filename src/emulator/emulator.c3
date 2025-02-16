@@ -165,11 +165,12 @@ fn void Cpu.init(&self)
 
 Memory mem;
 // TODO: multithreading by sending data between cpu structs with an array and a mutex
-tlocal Cpu cpu;
+//tlocal Cpu cpu;
 
 
 fn int main(String[] args)
 {
+	Cpu cpu;
 	cpu.init();
 	mem.new_init(common::MEM_SIZE);
 	defer mem.free();
@@ -245,7 +246,7 @@ fn int main(String[] args)
 	{
 		$if $feature(PERF):
 			iteration += 1;
-			if ((iteration % 10000000) == 0)
+			if ((iteration % 50000000) == 0)
 			{
 //				running = false; //1000000000
 				NanoDuration nano_seconds = clock.mark(); 
@@ -292,14 +293,12 @@ fn int main(String[] args)
 
 			case ADD: cpu.inst_add(width);
 			case IADD: cpu.unimplemented(width);
-			case ADDI: cpu.unimplemented(width);
+			case ADDI: cpu.inst_addi(width);
 			case IADDI: cpu.unimplemented(width);
-
-			case MOV: cpu.inst_mov(width);
 
 			case SUB: cpu.unimplemented(width);
 			case ISUB: cpu.unimplemented(width);
-			case SUBI: cpu.unimplemented(width);
+			case SUBI: cpu.inst_subi(width);
 			case ISUBI: cpu.unimplemented(width);
 
 			case MUL: cpu.unimplemented(width);
@@ -312,20 +311,20 @@ fn int main(String[] args)
 			case DIVI: cpu.unimplemented(width);
 			case IDIVI: cpu.unimplemented(width);
 
-			case JMP: cpu.unimplemented(width);
+			case JMP: cpu.inst_jmp(width);
 			case JMPI: cpu.unimplemented(width);
 			case AJMP: cpu.inst_ajmp(width);
 
 			case JEQ: cpu.unimplemented(width);
-			case JNE: cpu.unimplemented(width);
-			case JGT: cpu.unimplemented(width);
+			case JNE: cpu.inst_jne(width);
+			case JGT: cpu.inst_jgt(width);
 			case JGE: cpu.unimplemented(width);
 			case JLT: cpu.unimplemented(width);
 			case JLE: cpu.unimplemented(width);
 
 			case CMP: cpu.unimplemented(width);
 			case ICMP: cpu.unimplemented(width);
-			case CMPI: cpu.unimplemented(width);
+			case CMPI: cpu.inst_cmpi(width);
 			case ICMPI: cpu.unimplemented(width);
 
 			case XOR: cpu.unimplemented(width);
@@ -361,87 +360,29 @@ fn int main(String[] args)
 			case LD: cpu.inst_ld(width);
 			case LDI: cpu.inst_ldi(width);
 
-			case SD: cpu.unimplemented(width);
+			case SD: cpu.inst_sd(width);
 			case SDI: cpu.unimplemented(width);
+
+			case MOV: cpu.inst_mov(width);
 
 			case RET: cpu.unimplemented(width);
 			case SYSCALL: cpu.unimplemented(width);
 
-			case EXIT: cpu.unimplemented(width);
+			case EXIT: running = false;//cpu.inst_exit(width);
 
 			case DBG: cpu.inst_dbg(width);
 
-			case PRINT: cpu.unimplemented(width);
-			case PRINTI: cpu.unimplemented(width);
-			case PRINTINT: cpu.unimplemented(width);
+			case PRINT: cpu.inst_print(width);
+			case PRINTI: cpu.inst_printi(width);
+			case PRINTINT: cpu.inst_printint(width);
 
 /*			case PRINTI:
-			case PRINT:
-				if (width != W8)
-				{
-					logger::error("Only 8-bit PRINT implemented");
-					return 1;
-				}
-				logger::debug("Printing char '%c' (0x%x %s)", read_reg(0, W8), read_reg(0, W8), read_reg(0, W8));
-				io::printf("%c", read_reg(0, W8));
-			case ADDI:
-				@read_immr(1, width; BitWidth $width, #val)
-				{
-					write_reg(0, $width, @as($typefrom($width.type), read_reg(0, $width) + #val));
-				};
-			case SUBI:
-				@each_width(width; BitWidth $width)
-				{
-					write_reg(0, $width, @as($typefrom($width.type), read_reg(0, $width) - read_imm(1, $width)));
-				};
-			case CMPI:
-				@read_immr(1, width; BitWidth $width, #src)
-				{
-					logger::debug("Comparing value %s with value in register %s (%s)", @as(isz, #src), read_imm(0, W8), read_reg(0, $width));
-					$typefrom($width.itype) src = ($typefrom($width.itype))#src;
-					$typefrom($width.itype) dst = read_reg(0, $width);
-					logger::debug("src: %s, dst: %s", src, dst);
-					cpu.f_zero = dst == src;
-					cpu.f_carry =dst > src;
-				};
-			case JNE:
-				if (!cpu.f_zero)
-				{
-					logger::debug("JNE true");
-					usz old = *cpu.inst_ptr;
-					*cpu.inst_ptr += (isz)read_imm(0, W64);
-					logger::debug("JMPing from %s to %s, difference of %s", old, *cpu.inst_ptr, @as(isz, *cpu.inst_ptr - old));
-					continue;
-				}
-				else
-				{
-					logger::debug("JNE false");
-				}
-			case JGT:
-				if (cpu.f_carry)
-				{
-					usz old = *cpu.inst_ptr;
-					*cpu.inst_ptr += (isz)read_imm(0, W64);
-					logger::debug("JMPing from %s to %s, difference of %s", old, *cpu.inst_ptr, @as(isz, *cpu.inst_ptr - old));
-					continue;
-				}
-			case JMP:
-				usz old = *cpu.inst_ptr;
-				*cpu.inst_ptr += (isz)read_imm(0, W64);
-				logger::debug("JMPing from %s to %s, difference of %s", old, *cpu.inst_ptr, @as(isz, *cpu.inst_ptr - old));
-				continue;
-
 			case MOV:
 			case ADD:
 				// TODO: add directly instead of loading both, adding, and replacing as it will be more efficient
 				@each_width(width; BitWidth $width)
 				{
 					write_reg(0, $width, @as($typefrom($width.type), read_reg(0, $width) + read_reg(1, $width)));
-				};
-			case PRINTINT:
-				@each_width(width; BitWidth $width)
-				{
-					io::printf("%d", read_reg(0, $width));
 				};
 			case EXIT:
 				running = false;
@@ -456,7 +397,7 @@ fn int main(String[] args)
 		$if $feature(DELAY):
 			thread::sleep(1000000);
 		$endif
-//		move_forward(inst, width);
+//		self.move_forward(inst, width);
 	}
 	$if $feature(PERF):
 		NanoDuration nano_seconds = clock.mark(); 
@@ -471,65 +412,152 @@ fn void Cpu.inst_nop(self, BitWidth width)
 	return;
 }
 
+
 fn void Cpu.inst_add(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
-	write_reg(0, $width, @as($typefrom($width.type), read_reg(0, $width) + read_reg(1, $width)));
-	move_forward(ADD, $width);
+	self.write_reg(0, $width, @as($typefrom($width.type), self.read_reg(0, $width) + self.read_reg(1, $width)));
+	self.move_forward(ADD, $width);
 }
 
+fn void Cpu.inst_addi(&self, BitWidth width) => @each_width(width; BitWidth $width)
+{
+	self.write_reg(0, $width, @as($typefrom($width.type), self.read_reg(0, $width) + self.read_imm(1, $width)));
+	self.move_forward(ADDI, $width);
+}
 
-fn void Cpu.inst_addi(&self){}
 fn void Cpu.inst_iadd(&self){}
+
 fn void Cpu.inst_iaddi(&self){}
 
-fn void Cpu.inst_mov(&self, BitWidth width)
+
+fn void Cpu.inst_subi(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
-	@each_width(width; BitWidth $width)
-	{
-		write_reg(0, $width, read_reg(1, $width));
-		move_forward(MOV, $width);
-	};
+	self.write_reg(0, $width, @as($typefrom($width.type), self.read_reg(0, $width) - self.read_imm(1, $width)));
+	self.move_forward(SUBI, $width);
 }
+
+
+fn void Cpu.inst_jmp(&self, BitWidth width)
+{
+	usz old = *self.inst_ptr;
+	*self.inst_ptr += (isz)self.read_imm(0, W64);
+	logger::debug("JMPing from %s to %s, difference of %s", old, *self.inst_ptr, @as(isz, *self.inst_ptr - old));
+}
+
+
 
 fn void Cpu.inst_ajmp(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
-	*cpu.inst_ptr = read_imm(0, $width);;
+	*self.inst_ptr = self.read_imm(0, $width);;
 }
+
+
+fn void Cpu.inst_jne(&self, BitWidth width)
+{
+	if (!self.f_zero)
+	{
+		logger::debug("JNE true");
+		usz old = *self.inst_ptr;
+		*self.inst_ptr += (isz)self.read_imm(0, W64);
+		logger::debug("JMPing from %s to %s, difference of %s", old, *self.inst_ptr, @as(isz, *self.inst_ptr - old));
+	}
+	else
+	{
+		logger::debug("JNE false");
+		self.move_forward(JNE);
+	}
+}
+
+fn void Cpu.inst_jgt(&self, BitWidth width)
+{
+	if (self.f_carry)
+	{
+		usz old = *self.inst_ptr;
+		*self.inst_ptr += (isz)self.read_imm(0, W64);
+		logger::debug("JMPing from %s to %s, difference of %s", old, *self.inst_ptr, @as(isz, *self.inst_ptr - old));
+	}
+	else
+	{
+		self.move_forward(JGT);
+	}
+}
+
+
+fn void Cpu.inst_cmpi(&self, BitWidth width) => @each_width(width; BitWidth $width)
+{
+	logger::debug("Comparing value %s with value in register %s (%s)", @as(isz, self.read_reg(1, $width)), self.read_imm(0, W8), self.read_reg(0, $width));
+	$typefrom($width.itype) src = self.read_imm(1, $width);
+	$typefrom($width.itype) dst = self.read_reg(0, $width);
+	logger::debug("src: %s, dst: %s", src, dst);
+	self.f_zero = dst == src;
+	self.f_carry = dst > src;
+	self.move_forward(CMPI, $width);
+}
+
 
 fn void Cpu.inst_ld(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
-	//logger::debug("LD: '%s' <- '%s' ('%s' -> '%h')", read_imm(0, W8), read_reg(1), cpu.regs[read_reg(1)], mem.get(cpu.regs[read_reg(1)], $width));
-	write_reg(0, $width, mem.get(read_reg(1, W64), $width).get($width));
-	move_forward(LD, $width);
+	//logger::debug("LD: '%s' <- '%s' ('%s' -> '%h')", self.read_imm(0, W8), self.read_reg(1), self.regs[self.read_reg(1)], mem.get(self.regs[self.read_reg(1)], $width));
+	self.write_reg(0, $width, mem.get(self.read_reg(1, W64), $width).get($width));
+	self.move_forward(LD, $width);
 }
 
-fn void Cpu.inst_ldi(&self, BitWidth width) => @read_immr(1, width; BitWidth $width, #val)
+fn void Cpu.inst_ldi(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
-	write_reg(0, $width, #val);
-	move_forward(LDI, $width);
+	self.write_reg(0, $width, self.read_imm(1, $width));
+	self.move_forward(LDI, $width);
+}
+
+
+fn void Cpu.inst_sd(&self, BitWidth width) => @each_width(width; BitWidth $width)
+{
+	mem.get(self.read_reg(0, W64), $width).set($width, self.read_reg(1, $width));
+	self.move_forward(SD, $width);
+}
+
+
+fn void Cpu.inst_mov(&self, BitWidth width) => @each_width(width; BitWidth $width)
+{
+	self.write_reg(0, $width, self.read_reg(1, $width));
+	self.move_forward(MOV, $width);
 }
 
 
 fn void Cpu.inst_dbg(&self, BitWidth width)
 {
 	logger::info("-------- DBG --------");
-	foreach (i, reg : cpu.regs)
+	foreach (i, reg : self.regs)
 	{
 		logger::info("%s: %.16x", common::REG_NAMES[i], reg);
 	}
 	logger::info("---------------------");
 }
 
+
+fn void Cpu.inst_print(&self, BitWidth width) => @each_width(width; BitWidth $width)
+{
+	logger::debug("Printing char '%c' (0x%x %s)", self.read_reg(0, $width), self.read_reg(0, $width), self.read_reg(0, $width));
+	io::printf("%c", self.read_reg(0, $width));
+	self.move_forward(PRINT, $width);
+}
+
 fn void Cpu.inst_printi(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
-	logger::debug("Printing char '%c' (0x%x %s)", read_imm(0, $width), read_imm(0, $width), read_imm(0, $width));
-	io::printf("%c", read_imm(0, $width));
+	logger::debug("Printing char '%c' (0x%x %s)", self.read_imm(0, $width), self.read_imm(0, $width), self.read_imm(0, $width));
+	io::printf("%c", self.read_imm(0, $width));
+	self.move_forward(PRINTI, $width);
+}
+
+fn void Cpu.inst_printint(&self, BitWidth width) => @each_width(width; BitWidth $width)
+{
+	io::printf("%d", self.read_reg(0, $width));
+	self.move_forward(PRINTINT, $width);
 }
 
 
 fn void Cpu.unimplemented(self, BitWidth width) @deprecated("you should implement this instruction")
 {
-	logger::panic("Instruction not implemented yet%s", $feature(DEBUG) ? "" : ", build with -D DEBUG to see which one :)");
+	logger::panic("Instruction %s not implemented yet", InstructionType.from_ordinal(mem.get(*self.inst_ptr - 2, 1).get(W8)).name);
 }
 
 macro invalid_instruction(...)
@@ -561,7 +589,7 @@ macro @as_width(BitWidth $width, #expr, bool $signed = false)
 	$endif
 }
 
-macro void @read_immr(usz $offset, BitWidth width; @body(BitWidth $width, #expr)) @deprecated("Use @each_width with read_imm")
+/*macro void @read_immr(usz $offset, BitWidth width; @body(BitWidth $width, #expr)) @deprecated("Use @each_width with read_imm")
 {
 	switch (width)
 	{
@@ -574,21 +602,21 @@ macro void @read_immr(usz $offset, BitWidth width; @body(BitWidth $width, #expr)
 		case W64:
 			@body(W64, read_imm($offset, W64));
 	}
+}*/
+
+macro Cpu.read_imm(&self, usz $offset, BitWidth $width)
+{
+	return mem.get(*self.inst_ptr + $offset, $width).get($width);
 }
 
-macro read_imm(usz $offset, BitWidth $width)
+macro void Cpu.write_reg(&self, usz offset, BitWidth $width, value)
 {
-	return mem.get(*cpu.inst_ptr + $offset, $width).get($width);
+	self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)].write($width, value);
 }
 
-macro void write_reg(usz offset, BitWidth $width, value)
+macro Cpu.read_reg(&self, usz offset, BitWidth $width)
 {
-	cpu.regs[mem.get(*cpu.inst_ptr + offset, 1).get(W8)].write($width, value);
-}
-
-macro read_reg(usz offset, BitWidth $width)
-{
-	return cpu.regs[mem.get(*cpu.inst_ptr + offset, 1).get(W8)].read($width);
+	return self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)].read($width);
 }
 
 //*
@@ -610,16 +638,16 @@ macro read_reg(usz offset, BitWidth $width)
 	}
 }*/
 
-macro move_forward(InstructionType $inst, BitWidth $width)
+macro Cpu.move_forward(&self, InstructionType $inst, BitWidth $width = W64)
 {
 	$for (var $i = 0; $i < $inst.args.count; $i++)
 		$switch ($inst.args.arg[$i])
 			$case REG:
-				*cpu.inst_ptr += common::REG_SIZE;
+				*self.inst_ptr += common::REG_SIZE;
 			$case REGOFF:
-				*cpu.inst_ptr += common::REG_SIZE + common::OFF_SIZE;
+				*self.inst_ptr += common::REG_SIZE + common::OFF_SIZE;
 			$case IMM:
-				*cpu.inst_ptr += $width.size;
+				*self.inst_ptr += $width.size;
 		$endswitch
 	$endfor
 }
