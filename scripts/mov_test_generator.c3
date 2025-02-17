@@ -6,9 +6,7 @@ import common;
 
 const InstSize EXIT = @as(InstSize, Instruction{.real = true, .type = EXIT});
 
-fn InstSize inst(Instruction inst) => (InstSize)inst;
-fn InstSize inst2(InstructionType type, OpType src_type, OpType dst_type, BitWidth width) =>
-   (InstSize)Instruction{.real = true, .type = type, .dst_type = dst_type, .src_type = src_type, .width = width};
+macro inst(InstructionType $type, BitWidth $width) => (char)$type +++ (char)$width;
 
 fn void main()
 {

@@ -10,8 +10,8 @@ import logger;
 const MEM_SIZE = 0x02000000_0;
 
 // 8 General registers
-const NUM_REGISTERS = 12;
-const String[NUM_REGISTERS] REG_NAMES = {"r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "rsp", "esp", "scl", "scr"};
+const NUM_REGISTERS = 13;
+const String[NUM_REGISTERS] REG_NAMES = {"r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "rsp", "esp", "scl", "scr", "flg"};
 const REG_SIZE = 1; // Char
 const PTR_SIZE = 8; // Long
 const OFF_SIZE = 2; // Short
@@ -44,6 +44,11 @@ enum InstructionType : char (String name, InstructionArgs args)
   IDIV = { "IDIV", args(REG, REG) },
   DIVI = { "DIVi", args(REG, IMM) },
   IDIVI = { "IDIVi", args(REG, IMM) },
+
+  MOD = { "MOD", args(REG, REG) },
+  IMOD = { "IMOD", args(REG, REG) },
+  MODI = { "MODi", args(REG, IMM) },
+  IMODI = { "IMODi", args(REG, IMM) },
 
   JMP = { "JMP", args(IMM) },
   JMPI = { "JMPi", args(REG) },

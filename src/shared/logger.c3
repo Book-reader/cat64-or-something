@@ -11,7 +11,7 @@ macro debug(String msg, ...)
 
 macro info(String msg, ...)
 {
-  io::printf("[INFO] (%s:%s %s) ", $$FILE, $$LINE, $$FUNC);
+  io::printf("[INFO] ");
   io::printfn(msg, $vasplat);
 }
 

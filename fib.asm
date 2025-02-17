@@ -11,7 +11,9 @@ $loop:
 
 	PRINTINT r0
 	PRINTi.8 10
+
 	CMPi r3, 0
 	JGT $loop
 
+DBG
 EXIT

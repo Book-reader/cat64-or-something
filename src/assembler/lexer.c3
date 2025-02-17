@@ -60,7 +60,7 @@ fn bool is_valid_number(String data)
 	return true;
 }
 
-const String INVALID_LABEL = "0123456789.:";
+const String INVALID_LABEL = ".:";
 
 fn bool is_valid_label_decl(String data)
 {

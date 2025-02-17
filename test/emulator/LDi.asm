@@ -1,0 +1,4 @@
+LDi r0, 0x3f23e4334
+LDi.32 r1, 0x124fae23
+LDi.16 r2, 0x23fe
+LDi.8 r3, 0x2e

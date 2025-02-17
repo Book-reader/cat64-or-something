@@ -4,6 +4,7 @@ import common;
 import parser;
 import lexer;
 import codegen;
+import preprocessor;
 import logger;
 
 import std::io;
@@ -31,7 +32,15 @@ fn int main(String[] args)
   $endif
   logger::debug("---------------");
 
-  Tokens! lexed = lexer::lex(file_data);
+  Bytes! preprocessed = preprocessor::process(file_data);
+  if (catch err = preprocessed)
+  {
+    logger::error("Error while preprocessing: %s", err);
+    return 1;
+  }
+  defer preprocessed.free();
+
+  Tokens! lexed = lexer::lex(preprocessed.array_view());
   if (catch err = lexed)
   {
     logger::error("Error while lexing tokens: %s", err);
@@ -75,3 +84,98 @@ fn int main(String[] args)
   return 0;
 }
 
+module preprocessor;
+import common;
+import logger;
+import lexer;
+import std::io;
+import std::collections::map;
+
+def Aliases = HashMap(<String, String>);
+
+fn Bytes! process(char[] data)
+{
+	Bytes all;
+	all.new_init();
+
+	Bytes line;
+	@pool()
+	{
+		line.temp_init();
+		foreach (ch : data)
+		{
+			line.push(ch);
+			if (ch == '\n')
+			{
+				process_line(&line)!;
+				all.add_all(&line);
+				line.clear();
+			}
+		}
+	};
+
+	return all;
+}
+
+fault PreprocessorError
+{
+	INVALID_DIRECTIVE,
+}
+
+Aliases aliases;
+
+fn void! process_line(Bytes* line)
+{
+	if (line.len() == 1) return;
+	logger::debug("Preprocessing line '%s'", (String)line.array_view()[:^1]);
+	String line_s = @as(String, line.array_view()[:^1]);
+	if (line.get(0) == '@')
+	{
+		String directive = line_s[:line_s.index_of(" ")!];
+		switch (directive)
+		{
+			case "@include":
+				logger::debug("Found @include");
+				Bytes! new = process(file::load_new(line_s[line_s.index_of(" ") + 1..]));
+				if (catch err = new)
+				{
+					io::eprintfn("Error with directive '%s'", line_s);
+					return err?;
+				}
+				line.free();
+				*line = new;
+			case "@define":
+				String the_part = line_s[line_s.index_of(" ")! + 1..];
+				String name = the_part[:the_part.index_of(" ")!].copy();
+				String alias = the_part[the_part.index_of(" ")! + 1..].copy();
+				logger::debug("defining %s as %s", name, alias);
+				aliases.set(name, alias);
+				line.clear();
+			case "@undefine":
+				aliases.remove(line_s[line_s.index_of(" ")! + 1..]);
+				line.clear();
+			default:
+				io::eprintfn("Error: invalid preprocessor directive '%s'", directive);
+				return PreprocessorError.INVALID_DIRECTIVE?;
+		}
+	}
+	else if (line_s[0] != '#')
+	{
+		foreach (alias : aliases.iter())
+		{
+			logger::debug("key: %s, value: %s", alias.key, alias.value);
+			if (line_s.contains(alias.key) && (line_s.index_of(alias.key)!! == 0 || lexer::SEPERATORS.contains_char(line_s[line_s.index_of(alias.key)!! - 1])) && (line_s.index_of(alias.key)!! + alias.key.len == line_s.len || lexer::SEPERATORS.contains_char(line_s[line_s.index_of(alias.key)!! + alias.key.len])))
+			{
+				usz start_idx = line_s.index_of(alias.key)!! == 0 ? 0 : line_s.index_of(alias.key)!! - 1;
+				usz end_idx = line_s.index_of(alias.key)!! + alias.key.len == line_s.len ? line_s.len : line_s.index_of(alias.key)!! + alias.key.len;
+
+				logger::debug("would be replaced as %s%s%s", line_s[..start_idx], alias.value, line_s[end_idx..]);
+				line.clear();
+				@pool()
+				{
+					*line.new_init_with_array(string::tformat("%s%s%s\n", start_idx == 0 ? "" : line_s[..start_idx], alias.value, line_s[end_idx..]));
+				};
+			}
+		}
+	}
+}

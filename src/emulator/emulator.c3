@@ -140,6 +140,14 @@ fn uint Register.read_W32(self) => @as(uint, self & 0x00000000ffffffff);
 
 fn ulong Register.read_W64(self) => self;
 
+bitstruct CpuFlags : Register
+{
+	bool zero : 0;
+	bool carry : 1;
+	bool overflow : 2;
+	bool paging : 3;
+}
+
 struct Cpu
 {
 	// The address of the current instruction in memory
@@ -147,11 +155,12 @@ struct Cpu
 	Register* stack_ptr; // A pointer to regs[8];
 	Register* syscl_addr; // A pointer to regs[10];
 	Register* syscl_ret; // A pointer to regs[11];
+	CpuFlags* flags;
 	Register[common::NUM_REGISTERS] regs;
 	// TODO: make these a register, but have the pointer cast to a bitstruct containing these and other flags
-	bool f_zero;
+//	bool f_zero;
 	// if gt
-	bool f_carry;
+//	bool f_carry;
 }
 
 fn void Cpu.init(&self)
@@ -161,6 +170,7 @@ fn void Cpu.init(&self)
 	self.stack_ptr = &self.regs[8];
 	self.syscl_addr = &self.regs[10];
 	self.syscl_ret = &self.regs[11];
+	self.flags = (CpuFlags*)&self.regs[12];
 }
 
 Memory mem;
@@ -188,32 +198,18 @@ fn int main(String[] args)
 
 	if (args.len > 1)
 	{
-		if (args[0] == "test")
+/*		if (args[0] == "test")
 		{
 			prog = args[1];
 		}
 		else
-		{
-			prog = file::load_new(args[1])!!;
-		}
+		{*/
+		prog = file::load_new(args[1])!!;
+//		}
 	}
 	else
 	{
-		prog = x"3b00 41 1403 0000000000000000 3400";//x"88e9 00000000000000ff 01 8989 01 00 88e4 0000000000000001 01 8882 00 00 8483 000000000000000b 8081 0000000000000000 800b";
-
-				// Push test
-				//x"e988 0001000000000000 08 1280 0b80";
-
-				// Hello World (little-endian):
-				// x"e988 ff00000000000000 01 8989 01 00 0680 e488 0100000000000000 01 8288 00 00 8384 0b00000000000000 0b80";
-
-				// Hello World (big-endian)
-				// x"88e9 00000000000000ff 01 8989 01 00 8006 88e4 0000000000000001 01 8882 00 00 8483 000000000000000b 800b";
-				// Hello World loop
-				// x"88e9 00000000000000ff 01 8989 01 00 8006 88e4 0000000000000001 01 8882 00 00 8483 000000000000000b 8081 0000000000000000 800b";
-
-				// x"83a4 00 0000000000000000";//" 88e9 00000000000000ff 01 8989 01 00 8006 88e4 0000000000000001 01 8582 00 00 9083 000000000000000b 800b";
-//				 x"88e9 00000000000000ff 01 8989 01 00 8006 88e4 0000000000000001 01 8c82 00 00 9483 ffffffffffffffe9 800b";
+		prog = x"340301ff00000000000000330000013c000003030101000000000000001c0000001503e8ffffffffffffff3b033a03";
 	}
 	defer if (args.len > 1 && args[0] != "test") free(prog);
 
@@ -310,6 +306,11 @@ fn int main(String[] args)
 			case IDIV: cpu.unimplemented(width);
 			case DIVI: cpu.unimplemented(width);
 			case IDIVI: cpu.unimplemented(width);
+
+			case MOD: cpu.unimplemented(width);
+			case IMOD: cpu.unimplemented(width);
+			case MODI: cpu.unimplemented(width);
+			case IMODI: cpu.unimplemented(width);
 
 			case JMP: cpu.inst_jmp(width);
 			case JMPI: cpu.unimplemented(width);
@@ -454,7 +455,7 @@ fn void Cpu.inst_ajmp(&self, BitWidth width) => @each_width(width; BitWidth $wid
 
 fn void Cpu.inst_jne(&self, BitWidth width)
 {
-	if (!self.f_zero)
+	if (!self.flags.zero)
 	{
 		logger::debug("JNE true");
 		usz old = *self.inst_ptr;
@@ -470,7 +471,7 @@ fn void Cpu.inst_jne(&self, BitWidth width)
 
 fn void Cpu.inst_jgt(&self, BitWidth width)
 {
-	if (self.f_carry)
+	if (self.flags.carry)
 	{
 		usz old = *self.inst_ptr;
 		*self.inst_ptr += (isz)self.read_imm(0, W64);
@@ -489,8 +490,8 @@ fn void Cpu.inst_cmpi(&self, BitWidth width) => @each_width(width; BitWidth $wid
 	$typefrom($width.itype) src = self.read_imm(1, $width);
 	$typefrom($width.itype) dst = self.read_reg(0, $width);
 	logger::debug("src: %s, dst: %s", src, dst);
-	self.f_zero = dst == src;
-	self.f_carry = dst > src;
+	self.flags.zero = dst == src;
+	self.flags.carry = dst > src;
 	self.move_forward(CMPI, $width);
 }
 
