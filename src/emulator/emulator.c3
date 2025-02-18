@@ -41,7 +41,7 @@ interface Addressable
 
 struct MemoryManagementUnit
 {
-	List(<Addressable>) memory;
+	List{Addressable} memory;
 }
 
 fn MemoryManagementUnit MemoryManagementUnit.new_init() @operator(construct)
@@ -304,12 +304,12 @@ fn int main(String[] args)
 
 			case DIV: cpu.unimplemented(width);
 			case IDIV: cpu.unimplemented(width);
-			case DIVI: cpu.unimplemented(width);
+			case DIVI: cpu.inst_divi(width);
 			case IDIVI: cpu.unimplemented(width);
 
 			case MOD: cpu.unimplemented(width);
 			case IMOD: cpu.unimplemented(width);
-			case MODI: cpu.unimplemented(width);
+			case MODI: cpu.inst_modi(width);
 			case IMODI: cpu.unimplemented(width);
 
 			case JMP: cpu.inst_jmp(width);
@@ -326,7 +326,7 @@ fn int main(String[] args)
 			case CMP: cpu.unimplemented(width);
 			case ICMP: cpu.unimplemented(width);
 			case CMPI: cpu.inst_cmpi(width);
-			case ICMPI: cpu.unimplemented(width);
+			case ICMPI: cpu.inst_icmpi(width);
 
 			case XOR: cpu.unimplemented(width);
 			case XORI: cpu.unimplemented(width);
@@ -426,15 +426,29 @@ fn void Cpu.inst_addi(&self, BitWidth width) => @each_width(width; BitWidth $wid
 	self.move_forward(ADDI, $width);
 }
 
-fn void Cpu.inst_iadd(&self){}
+fn void Cpu.inst_iadd(&self){unreachable();}
 
-fn void Cpu.inst_iaddi(&self){}
+fn void Cpu.inst_iaddi(&self){unreachable();}
 
 
 fn void Cpu.inst_subi(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	self.write_reg(0, $width, @as($typefrom($width.type), self.read_reg(0, $width) - self.read_imm(1, $width)));
 	self.move_forward(SUBI, $width);
+}
+
+
+fn void Cpu.inst_divi(&self, BitWidth width) => @each_width(width; BitWidth $width)
+{
+	self.write_reg(0, $width, @as($typefrom($width.itype) , self.read_reg(0, $width) / self.read_imm(1, $width)));
+	self.move_forward(DIVI, $width);
+}
+
+
+fn void Cpu.inst_modi(&self, BitWidth width) => @each_width(width; BitWidth $width)
+{
+	self.write_reg(0, $width, @as($typefrom($width.itype) , self.read_reg(0, $width) % self.read_imm(1, $width)));
+	self.move_forward(MODI, $width);
 }
 
 
@@ -487,12 +501,23 @@ fn void Cpu.inst_jgt(&self, BitWidth width)
 fn void Cpu.inst_cmpi(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	logger::debug("Comparing value %s with value in register %s (%s)", @as(isz, self.read_reg(1, $width)), self.read_imm(0, W8), self.read_reg(0, $width));
-	$typefrom($width.itype) src = self.read_imm(1, $width);
-	$typefrom($width.itype) dst = self.read_reg(0, $width);
+	$typefrom($width.type) src = self.read_imm(1, $width);
+	$typefrom($width.type) dst = self.read_reg(0, $width);
 	logger::debug("src: %s, dst: %s", src, dst);
 	self.flags.zero = dst == src;
 	self.flags.carry = dst > src;
 	self.move_forward(CMPI, $width);
+}
+
+fn void Cpu.inst_icmpi(&self, BitWidth width) => @each_width(width; BitWidth $width)
+{
+	logger::debug("Comparing value %s with value in register %s (%s)", @as(isz, self.read_reg(1, $width)), self.read_imm(0, W8), self.read_reg(0, $width));
+	$typefrom($width.itype) src = self.read_imm(1, $width, true);
+	$typefrom($width.itype) dst = self.read_reg(0, $width, true);
+	logger::debug("src: %s, dst: %s", src, dst);
+	self.flags.zero = dst == src;
+	self.flags.carry = dst > src;
+	self.move_forward(ICMPI, $width);
 }
 
 
@@ -563,7 +588,7 @@ fn void Cpu.unimplemented(self, BitWidth width) @deprecated("you should implemen
 
 macro invalid_instruction(...)
 {
-	logger::panic("Invalid instruction %x %s %s %s %s", $vasplat, $vasplat);
+	logger::panic("Invalid instruction 0x%x %s %s %s %s", $vasplat, $vasplat);
 }
 
 macro void @each_width(BitWidth width; @body(BitWidth $width))
@@ -590,54 +615,31 @@ macro @as_width(BitWidth $width, #expr, bool $signed = false)
 	$endif
 }
 
-/*macro void @read_immr(usz $offset, BitWidth width; @body(BitWidth $width, #expr)) @deprecated("Use @each_width with read_imm")
+macro Cpu.read_imm(&self, usz $offset, BitWidth $width, bool $signed = false)
 {
-	switch (width)
-	{
-		case W8:
-			@body(W8, read_imm($offset, W8));
-		case W16:
-			@body(W16, read_imm($offset, W16));
-		case W32:
-			@body(W32, read_imm($offset, W32));
-		case W64:
-			@body(W64, read_imm($offset, W64));
-	}
-}*/
-
-macro Cpu.read_imm(&self, usz $offset, BitWidth $width)
-{
-	return mem.get(*self.inst_ptr + $offset, $width).get($width);
+	$if $signed:
+		return @as($typefrom($width.itype),  mem.get(*self.inst_ptr + $offset, $width).get($width));
+	$else
+		return @as($typefrom($width.itype), mem.get(*self.inst_ptr + $offset, $width).get($width));
+	$endif
 }
 
+<*
+ @require @typeis(value, $typefrom($width.type)) ||| @typeis(value, $typefrom($width.itype))
+*>
 macro void Cpu.write_reg(&self, usz offset, BitWidth $width, value)
 {
 	self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)].write($width, value);
 }
 
-macro Cpu.read_reg(&self, usz offset, BitWidth $width)
+macro Cpu.read_reg(&self, usz offset, BitWidth $width, bool $signed = false)
 {
-	return self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)].read($width);
+	$if $signed:
+		return @as($typefrom($width.itype), self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)].read($width));
+	$else
+		return @as($typefrom($width.type), self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)].read($width));
+	$endif
 }
-
-//*
-//	@require inst.args.count < common::MAX_INST_ARGS
-//*
-/*fn void move_forward(InstructionType inst, BitWidth width)
-{
-	for (usz i = 0, usz len = inst.args.count; i < len; i++)
-	{
-		switch (inst.args.arg[i])
-		{
-			case REG:
-				*cpu.inst_ptr += common::REG_SIZE;
-			case REGOFF:
-				*cpu.inst_ptr += common::REG_SIZE + common::OFF_SIZE;
-			case IMM:
-				*cpu.inst_ptr += width.size;
-		}
-	}
-}*/
 
 macro Cpu.move_forward(&self, InstructionType $inst, BitWidth $width = W64)
 {
@@ -651,221 +653,5 @@ macro Cpu.move_forward(&self, InstructionType $inst, BitWidth $width = W64)
 				*self.inst_ptr += $width.size;
 		$endswitch
 	$endfor
-}
-
-/*macro move_forward(...)
-{
-	$for (var $i = 0; $i < $vacount; $i++)
-		*cpu.inst_ptr += @as(usz, $vaconst[$i]);
-	$endfor
-}*/
-
-/*
-macro vm_mov(Instruction inst, BitWidth $width)
-{
-	ReadResult out = read_src(inst, 0, $width);
-	*cpu.inst_ptr += out.diff;
-	logger::debug("MOV 1: inst_ptr += %s", out.diff);
-	logger::debug("MOVing %s (0x%x)", out.get($width), out.get($width));
-	usz mov = write(inst, $width, out.get($width));
-	logger::debug("MOV 2: inst_ptr += %s", mov);
-	*cpu.inst_ptr += mov;
-}
-
-macro vm_add(Instruction inst, BitWidth $width)
-{
-	ReadResult src = read_src(inst, 0, $width);
-	ReadResult dst = read_dst(inst, src.diff, $width);
-	logger::debug("adding %s to %s", src.get($width), dst.get($width));
-
-	*cpu.inst_ptr += src.diff;
-	(void)write(inst, $width, @as($typefrom($width.type), dst.get($width) + src.get($width)));
-	*cpu.inst_ptr += dst.diff;
-
-	logger::debug("inst_ptr after write %s", *cpu.inst_ptr);
-
-	logger::debug("src: %x, dst: %x", src.get($width), dst.get($width));
-}
-
-macro vm_sub(Instruction inst, BitWidth $width)
-{
-	ReadResult src = read_src(inst, 0, $width);
-	ReadResult dst = read_dst(inst, src.diff, $width);
-	logger::debug("subtracting %s from %s", src.get($width), dst.get($width));
-
-	(void)write(inst, $width, @as($typefrom($width.type), dst.get($width) - src.get($width)));
-	*cpu.inst_ptr += src.diff + dst.diff;
-
-	logger::debug("inst_ptr after write %s", *cpu.inst_ptr);
-
-	logger::debug("src: %x, dst: %x", src.get($width), dst.get($width));
-}
-
-
-macro vm_cmp(Instruction inst, BitWidth $width)
-{
-	ReadResult src = read_src(inst, 0, $width);
-	ReadResult dst = read_dst(inst, src.diff, $width);
-	*cpu.inst_ptr += src.diff + dst.diff;
-
-
-	logger::debug("Comparing %s and %s", src.get($width), dst.get($width));
-
-	cpu.f_zero = src.get($width) == dst.get($width);
-	cpu.f_carry = src.get($width) > dst.get($width);
-
-	logger::debug("Equal: %s, src > dst: %s", cpu.f_zero, cpu.f_carry);
-}
-
-macro vm_and(Instruction inst, BitWidth $width)
-{
-	ReadResult src = read_src(inst, 0, $width);
-	ReadResult dst = read_dst(inst, src.diff, $width);
-	logger::debug("ANDing %s and %s", src.get($width), dst.get($width));
-
-	(void)write(inst, $width, @as($typefrom($width.type), dst.get($width) & src.get($width)));
-	*cpu.inst_ptr += src.diff + dst.diff;
-}
-
-macro vm_not(Instruction inst, BitWidth $width)
-{
-	// TODO: it might actually be dst_type, I cannot remember
-	ReadResult src = read_src(inst, 0, $width);
-	logger::debug("NOTing %s", src.get($width), );
-
-	(void)write(inst, $width, @as($typefrom($width.type), ~ src.get($width)));
-	*cpu.inst_ptr += src.diff;
-}
-
-macro vm_or(Instruction inst, BitWidth $width)
-{
-	ReadResult src = read_src(inst, 0, $width);
-	ReadResult dst = read_dst(inst, src.diff, $width);
-	logger::debug("ORing %s and %s", src.get($width), dst.get($width));
-
-	(void)write(inst, $width, @as($typefrom($width.type), dst.get($width) | src.get($width)));
-	*cpu.inst_ptr += src.diff + dst.diff;
-}
-
-macro vm_xor(Instruction inst, BitWidth $width)
-{
-	ReadResult src = read_src(inst, 0, $width);
-	ReadResult dst = read_dst(inst, src.diff, $width);
-	logger::debug("ANDing %s and %s", src.get($width), dst.get($width));
-
-	(void)write(inst, $width, @as($typefrom($width.type), dst.get($width) ^ src.get($width)));
-	*cpu.inst_ptr += src.diff + dst.diff;
-}
-
-macro vm_push(Instruction inst, BitWidth $width)
-{
-	*cpu.stack_ptr -= $width;
-	ReadResult src = read_src(inst, 0, $width);
-	*cpu.inst_ptr += src.diff;
-
-	char[$width] buf;
-	buf[..].set($width, src.get($width));
-	mem.set(*cpu.stack_ptr, $width, buf[:$width]);
-}
-
-macro vm_pop(Instruction inst, BitWidth $width)
-{
-	*cpu.inst_ptr += write(inst, $width, mem.get(*cpu.stack_ptr, $width).get($width));
-	*cpu.stack_ptr += $width;
-}
-fn void vm_syscall(Instruction inst)
-{
-	ReadResult src = read_src(inst, 0, W64);
-	*cpu.inst_ptr += src.diff;
-	*cpu.syscl_ret = *cpu.inst_ptr + 1;
-	*cpu.inst_ptr = src.get(W64) * BitWidth.W64 + *cpu.syscl_addr;
-}
-
-fn void vm_ret(Instruction inst)
-{
-	*cpu.inst_ptr = mem.get(*cpu.stack_ptr, BitWidth.W64).get(W64);
-}
-
-macro write(Instruction inst, BitWidth $width, value) => @write(<$width>)(&cpu, &mem, inst, value);
-
-macro ReadResult read_src(Instruction inst, ulong offset, BitWidth $width) => @read(<$width>)(&cpu, &mem, inst, offset, src_type);
-macro ReadResult read_dst(Instruction inst, ulong offset, BitWidth $width) => @read(<$width>)(&cpu, &mem, inst, offset, dst_type);
-
-module emulator::read_write(<WIDTH>);
-import common;
-import logger;
-
-$assert($typeof(WIDTH).typeid == BitWidth.typeid && "WIDTH must be a BitWidth");
-
-macro ReadResult @read(Cpu* cpu, Memory* mem, Instruction inst, ulong offset, #arg_type) @nodiscard @builtin
-{
-	logger::debug("@read: %s", inst.#arg_type);
-	ulong addr =	*cpu.inst_ptr + offset;
-	logger::debug("mem at addr (%s 0x%x): %h %s", addr, addr, mem.get(addr, 8), mem.get(addr, 8));
-	if (!inst.$eval($stringify(#arg_type) +++ "_rel"))
-	{
-		switch (inst.#arg_type)
-		{
-			case NUM:
-//				logger::debug("NUM: nearby memory: %s, number: %x", mem.get(addr, 10), mem.get(addr, WIDTH).get(WIDTH));
-				return ReadResult.new(WIDTH, WIDTH, mem.get(addr, WIDTH).get(WIDTH));
-			case REG:
-				logger::debug("REG %s (%s) contains %.16x (8: %.2x, 16: %.4x, 32: %.8x, 64: %.16x)", common::REG_NAMES[mem.get(addr, 1).get(W8)], WIDTH, cpu.regs[mem.get(addr, 1).get(W8)], cpu.regs[mem.get(addr, 1).get(W8)].read(W8), cpu.regs[mem.get(addr, 1).get(W8)].read(W16), cpu.regs[mem.get(addr, 1).get(W8)].read(W32), cpu.regs[mem.get(addr, 1).get(W8)].read(W64));
-				return ReadResult.new(WIDTH, 1, cpu.regs[mem.get(addr, 1).get(W8)].read(WIDTH));
-			case REGPTR:
-				logger::debug("REGPTR %s contains %.16x pointing to %h", common::REG_NAMES[mem.get(addr, 1).get(W8)], cpu.regs[mem.get(addr, 1).get(W8)], mem.get(cpu.regs[mem.get(addr, 1).get(W8)], WIDTH));
-				logger::debug("Nearby REGPTR: %h", mem.get(cpu.regs[mem.get(addr, 1).get(W8)], 20));
-				return ReadResult.new(WIDTH, 1, mem.get(cpu.regs[mem.get(addr, 1).get(W8)], WIDTH).get(WIDTH));
-			case PTR:
-				return ReadResult.new(WIDTH, BitWidth.W64, mem.get(mem.get(addr, BitWidth.W64).get(W64), WIDTH).get(WIDTH));
-//			default:
-//				logger::error("Not Implemented: %s", inst.dst_type);
-		}
-	}
-	else
-	{
-		// TODO: call @read here and add the number returned to *cpu.inst_ptr. will need a `bool $recurse = true` in @read that is set to false the second time
-		// Will still need the `$if WIDTH != W64` check
-		//logger::error("Relative @read is not implemented yet");
-		switch (inst.#arg_type)
-		{
-			case NUM:
-				$if WIDTH == W64:
-					return ReadResult.new(WIDTH, WIDTH, @as(long, addr) + @as(long, mem.get(addr, WIDTH).get(WIDTH)));
-				$else
-					logger::error("Can only read a 64 bit number relatively");
-				$endif
-			case PTR:
-				return ReadResult.new(WIDTH, BitWidth.W64, mem.get(@as(long, addr) + @as(long, mem.get(addr, BitWidth.W64).as_W64()), WIDTH).get(WIDTH));
-			case REGPTR:
-				return ReadResult.new(WIDTH, 1, mem.get(@as(long, addr) + @as(long, cpu.regs[mem.get(addr, 1).as_W8()]), WIDTH).get(WIDTH));
-			case REG:
-				logger::error("Cannot read %s relatively (yet)", inst.#arg_type);
-		}
-	}
-}
-
-macro usz @write(Cpu* cpu, Memory* mem, Instruction inst, value) @nodiscard @builtin
-{
-	logger::debug("Writing %s (0x%x)", value, value);
-	if (!inst.dst_type_rel)
-	{
-		switch (inst.dst_type)
-		{
-			case NUM:
-				logger::error("Cannot MOV to NUM");
-			case REG:
-				logger::debug("to REG %s (%s) ", common::REG_NAMES[mem.get(*cpu.inst_ptr, 1).get(W8)], mem.get(*cpu.inst_ptr, 1).get(W8));
-				cpu.regs[mem.get(*cpu.inst_ptr, 1).get(W8)].write(WIDTH, value);
-				return 1;
-//			case REGPTR:
-			default:
-				logger::error("Writing to %s is unimplemented", inst.dst_type);
-		}
-	}
-	else
-	{
-		logger::error("Relative @write is not implemented yet (needed for label data)");
-	}
 }
 
