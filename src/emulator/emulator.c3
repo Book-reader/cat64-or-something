@@ -453,7 +453,7 @@ BitWidth width;
 				nextcase GET;
 			case PRINTI: cpu.inst_printi(width);
 				nextcase GET;
-			case PRINTINT: cpu.inst_printint(width) @inline;
+			case PRINTINT: cpu.inst_printint(width);
 				nextcase GET;
 			case BREAK: return 0;
 
@@ -483,51 +483,51 @@ BitWidth width;
 	return 0;
 }
 
-fn void Cpu.inst_nop(self, BitWidth width)
+macro Cpu.inst_nop(self, BitWidth width)
 {
 	return;
 }
 
 
-fn void Cpu.inst_add(&self, BitWidth width) => @each_width(width; BitWidth $width)
+macro Cpu.inst_add(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	self.write_reg(0, $width, @as($typefrom($width.type), self.read_reg(0, $width) + self.read_reg(1, $width)));
 	self.move_forward(ADD, $width);
 }
 
-fn void Cpu.inst_addi(&self, BitWidth width) => @each_width(width; BitWidth $width)
+macro Cpu.inst_addi(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	self.write_reg(0, $width, @as($typefrom($width.type), self.read_reg(0, $width) + self.read_imm(1, $width)));
 	self.move_forward(ADDI, $width);
 }
 
-fn void Cpu.inst_iadd(&self){unreachable();}
+macro Cpu.inst_iadd(&self){unreachable();}
 
-fn void Cpu.inst_iaddi(&self){unreachable();}
+macro Cpu.inst_iaddi(&self){unreachable();}
 
 
-fn void Cpu.inst_subi(&self, BitWidth width) => @each_width(width; BitWidth $width)
+macro Cpu.inst_subi(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	self.write_reg(0, $width, @as($typefrom($width.type), self.read_reg(0, $width) - self.read_imm(1, $width)));
 	self.move_forward(SUBI, $width);
 }
 
 
-fn void Cpu.inst_divi(&self, BitWidth width) => @each_width(width; BitWidth $width)
+macro Cpu.inst_divi(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	self.write_reg(0, $width, @as($typefrom($width.itype) , self.read_reg(0, $width) / self.read_imm(1, $width)));
 	self.move_forward(DIVI, $width);
 }
 
 
-fn void Cpu.inst_modi(&self, BitWidth width) => @each_width(width; BitWidth $width)
+macro Cpu.inst_modi(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	self.write_reg(0, $width, @as($typefrom($width.itype) , self.read_reg(0, $width) % self.read_imm(1, $width)));
 	self.move_forward(MODI, $width);
 }
 
 
-fn void Cpu.inst_jmp(&self, BitWidth width)
+macro Cpu.inst_jmp(&self, BitWidth width)
 {
 	usz old = *self.inst_ptr;
 	*self.inst_ptr += (isz)self.read_imm(0, W64);
@@ -536,13 +536,13 @@ fn void Cpu.inst_jmp(&self, BitWidth width)
 
 
 
-fn void Cpu.inst_ajmp(&self, BitWidth width) => @each_width(width; BitWidth $width)
+macro Cpu.inst_ajmp(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	*self.inst_ptr = self.read_imm(0, $width);;
 }
 
 
-fn void Cpu.inst_jne(&self, BitWidth width)
+macro Cpu.inst_jne(&self, BitWidth width)
 {
 	if (!self.flags.zero)
 	{
@@ -558,7 +558,7 @@ fn void Cpu.inst_jne(&self, BitWidth width)
 	}
 }
 
-fn void Cpu.inst_jgt(&self, BitWidth width)
+macro Cpu.inst_jgt(&self, BitWidth width)
 {
 	if (self.flags.carry)
 	{
@@ -573,7 +573,7 @@ fn void Cpu.inst_jgt(&self, BitWidth width)
 }
 
 
-fn void Cpu.inst_cmpi(&self, BitWidth width) => @each_width(width; BitWidth $width)
+macro Cpu.inst_cmpi(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	logger::debug("Comparing value %s with value in register %s (%s)", @as(isz, self.read_reg(1, $width)), self.read_imm(0, W8), self.read_reg(0, $width));
 	$typefrom($width.type) src = self.read_imm(1, $width);
@@ -584,7 +584,7 @@ fn void Cpu.inst_cmpi(&self, BitWidth width) => @each_width(width; BitWidth $wid
 	self.move_forward(CMPI, $width);
 }
 
-fn void Cpu.inst_icmpi(&self, BitWidth width) => @each_width(width; BitWidth $width)
+macro Cpu.inst_icmpi(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	logger::debug("Comparing value %s with value in register %s (%s)", @as(isz, self.read_reg(1, $width)), self.read_imm(0, W8), self.read_reg(0, $width));
 	$typefrom($width.itype) src = self.read_imm(1, $width, true);
@@ -596,35 +596,35 @@ fn void Cpu.inst_icmpi(&self, BitWidth width) => @each_width(width; BitWidth $wi
 }
 
 
-fn void Cpu.inst_ld(&self, BitWidth width) => @each_width(width; BitWidth $width)
+macro Cpu.inst_ld(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	//logger::debug("LD: '%s' <- '%s' ('%s' -> '%h')", self.read_imm(0, W8), self.read_reg(1), self.regs[self.read_reg(1)], mem.get(self.regs[self.read_reg(1)], $width));
 	self.write_reg(0, $width, mem.get(self.read_reg(1, W64), $width).get($width));
 	self.move_forward(LD, $width);
 }
 
-fn void Cpu.inst_ldi(&self, BitWidth width) => @each_width(width; BitWidth $width)
+macro Cpu.inst_ldi(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	self.write_reg(0, $width, self.read_imm(1, $width));
 	self.move_forward(LDI, $width);
 }
 
 
-fn void Cpu.inst_sd(&self, BitWidth width) => @each_width(width; BitWidth $width)
+macro Cpu.inst_sd(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	mem.get(self.read_reg(0, W64), $width).set($width, self.read_reg(1, $width));
 	self.move_forward(SD, $width);
 }
 
 
-fn void Cpu.inst_mov(&self, BitWidth width) => @each_width(width; BitWidth $width)
+macro Cpu.inst_mov(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	self.write_reg(0, $width, self.read_reg(1, $width));
 	self.move_forward(MOV, $width);
 }
 
 
-fn void Cpu.inst_dbg(&self, BitWidth width)
+macro Cpu.inst_dbg(&self, BitWidth width)
 {
 	logger::info("-------- DBG --------");
 	foreach (i, reg : self.regs)
@@ -635,7 +635,7 @@ fn void Cpu.inst_dbg(&self, BitWidth width)
 }
 
 
-fn void Cpu.inst_print(&self, BitWidth width) => @each_width(width; BitWidth $width)
+macro Cpu.inst_print(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	logger::debug("Printing char '%c' (0x%x %s)", self.read_reg(0, $width), self.read_reg(0, $width), self.read_reg(0, $width));
 	io::printf("%c", self.read_reg(0, $width));
@@ -644,7 +644,7 @@ fn void Cpu.inst_print(&self, BitWidth width) => @each_width(width; BitWidth $wi
 
 extern fn CInt putchar(CChar c);
 
-fn void Cpu.inst_printi(&self, BitWidth width) => @each_width(width; BitWidth $width)
+macro Cpu.inst_printi(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	logger::debug("Printing char '%c' (0x%x %s)", self.read_imm(0, $width), self.read_imm(0, $width), self.read_imm(0, $width));
 	putchar((CChar)self.read_imm(0, $width));
@@ -652,7 +652,7 @@ fn void Cpu.inst_printi(&self, BitWidth width) => @each_width(width; BitWidth $w
 	self.move_forward(PRINTI, $width);
 }
 
-fn void Cpu.inst_printint(&self, BitWidth width) => @each_width(width; BitWidth $width)
+macro Cpu.inst_printint(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	//io::printf("%d", self.read_reg(0, $width)) @inline;
 	print_int(self.read_reg(0, $width));
