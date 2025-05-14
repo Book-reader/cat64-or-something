@@ -118,6 +118,9 @@ enum InstructionType : char (String name, InstructionArgs args)
   PRINTI = { "PRINTi", args(IMM) },
 
   PRINTINT = { "PRINTINT", args(REG) },
+  GET_ = {"werhgegherhgeiurhei", args() },
+  GET = { "wghireiughoifwjefw", args() },
+  BREAK = { "regheughwiufhqiuewfhiw", args() },
 }
 
 enum BitWidth : char (String suffix, inline ulong size, typeid type, typeid itype)

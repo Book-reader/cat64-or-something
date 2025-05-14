@@ -238,19 +238,31 @@ fn int main(String[] args)
 		Clock clock = clock::now();
 	$endif
 
-	while (running)
+BitWidth width;
+//	while (running)
 	{
+		switch (InstructionType.GET_) @jump
+		{
+			case GET:
+		// TODO: set a clock speed
+		$if $feature(DELAY):
+			thread::sleep(1000000);
+		$endif
+//		self.move_forward(inst, width);
+
+				nextcase;
+			case GET_:
 		$if $feature(PERF):
 			iteration += 1;
 			if ((iteration % 50000000) == 0)
 			{
 //				running = false; //1000000000
 				NanoDuration nano_seconds = clock.mark(); 
-				io::printfn("\nTook %s or %s ns to do %s iterations, %dMhz", nano_seconds, @as(long, nano_seconds), iteration, (@as(double, iteration) /	nano_seconds.to_sec() / 1000000).round() );
-				thread::sleep(time::sec(1));
+				io::eprintfn("\nTook %s or %s ns to do %s iterations, %dMhz", nano_seconds, @as(long, nano_seconds), iteration, (@as(double, iteration) /	nano_seconds.to_sec() / 1000000).round() );
+				// thread::sleep(time::sec(1));
 				iteration = 0;
 				clock = clock::now();
-				continue;
+				// continue;
 			}
 //			if (iteration % 5000000 == 0) io::printfn("CPU Cycle: %s", iteration);
 		$endif
@@ -264,7 +276,7 @@ fn int main(String[] args)
 
 		char width_code = mem.get(*cpu.inst_ptr + 1, 1).get(W8);
 		if (width_code > BitWidth.elements - 1) invalid_instruction(width_code);
-		BitWidth width = BitWidth.from_ordinal(width_code);
+		width = BitWidth.from_ordinal(width_code);
 
 
 		logger::debug("%s -> %s%s (0x%.2x.0x%.2x)", *cpu.inst_ptr, inst.name, width.suffix, inst, width);
@@ -283,99 +295,167 @@ fn int main(String[] args)
 		*cpu.inst_ptr += 2;
 
 		// Execute the current instruction
-		switch (inst)
-		{
+			nextcase inst;
+				
 			case NOP: cpu.inst_nop(width);
+				nextcase GET;
 
 			case ADD: cpu.inst_add(width);
+				nextcase GET;
 			case IADD: cpu.unimplemented(width);
+				nextcase GET;
 			case ADDI: cpu.inst_addi(width);
+				nextcase GET;
 			case IADDI: cpu.unimplemented(width);
+				nextcase GET;
 
 			case SUB: cpu.unimplemented(width);
+				nextcase GET;
 			case ISUB: cpu.unimplemented(width);
+				nextcase GET;
 			case SUBI: cpu.inst_subi(width);
+				nextcase GET;
 			case ISUBI: cpu.unimplemented(width);
+				nextcase GET;
 
 			case MUL: cpu.unimplemented(width);
+				nextcase GET;
 			case IMUL: cpu.unimplemented(width);
+				nextcase GET;
 			case MULI: cpu.unimplemented(width);
+				nextcase GET;
 			case IMULI: cpu.unimplemented(width);
+				nextcase GET;
 
 			case DIV: cpu.unimplemented(width);
+				nextcase GET;
 			case IDIV: cpu.unimplemented(width);
+				nextcase GET;
 			case DIVI: cpu.inst_divi(width);
+				nextcase GET;
 			case IDIVI: cpu.unimplemented(width);
+				nextcase GET;
 
 			case MOD: cpu.unimplemented(width);
+				nextcase GET;
 			case IMOD: cpu.unimplemented(width);
+				nextcase GET;
 			case MODI: cpu.inst_modi(width);
+				nextcase GET;
 			case IMODI: cpu.unimplemented(width);
+				nextcase GET;
 
 			case JMP: cpu.inst_jmp(width);
+				nextcase GET;
 			case JMPI: cpu.unimplemented(width);
+				nextcase GET;
 			case AJMP: cpu.inst_ajmp(width);
+				nextcase GET;
 
 			case JEQ: cpu.unimplemented(width);
+				nextcase GET;
 			case JNE: cpu.inst_jne(width);
+				nextcase GET;
 			case JGT: cpu.inst_jgt(width);
+				nextcase GET;
 			case JGE: cpu.unimplemented(width);
+				nextcase GET;
 			case JLT: cpu.unimplemented(width);
+				nextcase GET;
 			case JLE: cpu.unimplemented(width);
+				nextcase GET;
 
 			case CMP: cpu.unimplemented(width);
+				nextcase GET;
 			case ICMP: cpu.unimplemented(width);
+				nextcase GET;
 			case CMPI: cpu.inst_cmpi(width);
+				nextcase GET;
 			case ICMPI: cpu.inst_icmpi(width);
+				nextcase GET;
 
 			case XOR: cpu.unimplemented(width);
+				nextcase GET;
 			case XORI: cpu.unimplemented(width);
+				nextcase GET;
 
 			case AND: cpu.unimplemented(width);
+				nextcase GET;
 			case ANDI: cpu.unimplemented(width);
+				nextcase GET;
 
 			case OR: cpu.unimplemented(width);
+				nextcase GET;
 			case ORI: cpu.unimplemented(width);
+				nextcase GET;
 
 			case NOT: cpu.unimplemented(width);
+				nextcase GET;
 			case NOTI: cpu.unimplemented(width);
+				nextcase GET;
 
 			case SLL: cpu.unimplemented(width);
+				nextcase GET;
 			case SLLI: cpu.unimplemented(width);
+				nextcase GET;
 			case SRL: cpu.unimplemented(width);
+				nextcase GET;
 			case SRLI: cpu.unimplemented(width);
+				nextcase GET;
 			case SRA: cpu.unimplemented(width);
+				nextcase GET;
 			case SRAI: cpu.unimplemented(width);
+				nextcase GET;
 
 			case BSE: cpu.unimplemented(width);
+				nextcase GET;
 			case BUS: cpu.unimplemented(width);
+				nextcase GET;
 
 			case PUSH: cpu.unimplemented(width);
+				nextcase GET;
 			case PUSHI: cpu.unimplemented(width);
+				nextcase GET;
 
 			case POP: cpu.unimplemented(width);
+				nextcase GET;
 			case POPI: cpu.unimplemented(width);
+				nextcase GET;
 
 			case CALL: cpu.unimplemented(width);
+				nextcase GET;
 
 			case LD: cpu.inst_ld(width);
+				nextcase GET;
 			case LDI: cpu.inst_ldi(width);
+				nextcase GET;
 
 			case SD: cpu.inst_sd(width);
+				nextcase GET;
 			case SDI: cpu.unimplemented(width);
+				nextcase GET;
 
 			case MOV: cpu.inst_mov(width);
+				nextcase GET;
 
 			case RET: cpu.unimplemented(width);
+				nextcase GET;
 			case SYSCALL: cpu.unimplemented(width);
+				nextcase GET;
 
 			case EXIT: running = false;//cpu.inst_exit(width);
+				nextcase GET;
 
 			case DBG: cpu.inst_dbg(width);
+				nextcase GET;
 
 			case PRINT: cpu.inst_print(width);
+				nextcase GET;
 			case PRINTI: cpu.inst_printi(width);
-			case PRINTINT: cpu.inst_printint(width);
+				nextcase GET;
+			case PRINTINT: cpu.inst_printint(width) @inline;
+				nextcase GET;
+			case BREAK: return 0;
 
 /*			case PRINTI:
 			case MOV:
@@ -394,11 +474,6 @@ fn int main(String[] args)
 				logger::error("Instruction %s not implemented yet", inst);
 				return 1;*/
 		}
-		// TODO: set a clock speed
-		$if $feature(DELAY):
-			thread::sleep(1000000);
-		$endif
-//		self.move_forward(inst, width);
 	}
 	$if $feature(PERF):
 		NanoDuration nano_seconds = clock.mark(); 
@@ -567,19 +642,42 @@ fn void Cpu.inst_print(&self, BitWidth width) => @each_width(width; BitWidth $wi
 	self.move_forward(PRINT, $width);
 }
 
+extern fn CInt putchar(CChar c);
+
 fn void Cpu.inst_printi(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
 	logger::debug("Printing char '%c' (0x%x %s)", self.read_imm(0, $width), self.read_imm(0, $width), self.read_imm(0, $width));
-	io::printf("%c", self.read_imm(0, $width));
+	putchar((CChar)self.read_imm(0, $width));
+	// io::printf("%c", self.read_imm(0, $width));
 	self.move_forward(PRINTI, $width);
 }
 
 fn void Cpu.inst_printint(&self, BitWidth width) => @each_width(width; BitWidth $width)
 {
-	io::printf("%d", self.read_reg(0, $width));
+	//io::printf("%d", self.read_reg(0, $width)) @inline;
+	print_int(self.read_reg(0, $width));
 	self.move_forward(PRINTINT, $width);
 }
 
+// import libc;
+//extern fn usz write(CInt filedes, void* buf, usz len);
+
+fn void print_int(usz num) @inline
+{
+	logger::debug("Printing '%d'", num);
+	if (num == 0) {
+		io::print("0");
+		return;
+	}
+	char[50] buf;
+	usz idx = buf.len - 1;
+	for (;num != 0; num /= 10)
+	{
+		buf[idx --] = '0' + (char)(num % 10);
+	}
+	//write(1, &buf[idx], buf.len - idx)@inline;
+	io::print((String)buf[idx..]) @inline;
+}
 
 fn void Cpu.unimplemented(self, BitWidth width) @deprecated("you should implement this instruction")
 {
