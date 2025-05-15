@@ -21,7 +21,7 @@ const REG_SIZE = 1; // Char
 const PTR_SIZE = 5; // Int
 const OFF_SIZE = 2; // Short
 
-$assert(ulong.sizeof == 8 && "Must be on a 64 bit system");
+$assert(usz.sizeof >= 5 && "Must be on at least a 32 bit system");
 
 def InstSize = ushort;
 

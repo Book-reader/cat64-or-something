@@ -9,17 +9,17 @@ import std::collections::list;
 
 struct ReadResult
 {
-	ulong diff;
+	uint diff;
 	union
 	{
 		char as_W8;
 		ushort as_W16;
 		uint as_W32;
-		ulong as_W64;
+		uint as_W64;
 	}
 }
 
-macro ReadResult ReadResult.new(BitWidth $width, usz diff, val) @operator(construct)
+macro ReadResult ReadResult.new(BitWidth $width, uint diff, val) @operator(construct)
 {
 	ReadResult new = {.diff = diff};
 	new.$eval("as_" +++ $width.nameof) = val;
@@ -31,12 +31,12 @@ macro ReadResult.get(self, BitWidth $width) => self.$eval("as_" +++ $width.nameo
 interface Addressable
 {
 	fn void free();
-	fn char get(ulong address);
-	fn bool contains(ulong address);
-	fn void set(ulong address, char value);
-	fn char[] get_range(ulong address, ulong len);
-	fn bool contains_range(ulong address, ulong len);
-	fn void set_range(ulong address, char[] values);
+	fn char get(uint address);
+	fn bool contains(uint address);
+	fn void set(uint address, char value);
+	fn char[] get_range(uint address, uint len);
+	fn bool contains_range(uint address, uint len);
+	fn void set_range(uint address, char[] values);
 }
 
 struct MemoryManagementUnit
@@ -60,7 +60,7 @@ fn void MemoryManagementUnit.free(&self)
 	self.memory.free();
 }
 
-fn Addressable! MemoryManagementUnit.request(&self, ulong address)
+fn Addressable! MemoryManagementUnit.request(&self, uint address)
 {
 	foreach (mem : self.memory)
 	{
@@ -69,7 +69,7 @@ fn Addressable! MemoryManagementUnit.request(&self, ulong address)
 	return MemoryError.OUT_OF_BOUNDS?;
 }
 
-fn bool MemoryManagementUnit.contains(&self, ulong address) => @ok(self.request(address));
+fn bool MemoryManagementUnit.contains(&self, uint address) => @ok(self.request(address));
 
 fault MemoryError
 {
@@ -81,10 +81,10 @@ fault MemoryError
 struct Memory// (Addressable)
 {
 	char[] ram;
-	ulong offset;
+	uint offset;
 }
 
-fn void Memory.new_init(&self, usz size, usz offset = 0)
+fn void Memory.new_init(&self, uint size, uint offset = 0)
 {
 	self.offset = offset;
 	self.ram = mem::new_array(char, size);
@@ -95,22 +95,22 @@ fn void Memory.free(&self) @dynamic
 	mem::free(self.ram);
 }
 
-/*fn bool Memory.contains(self, ulong addr) @inline => addr - self.offset < self.ram.len;
+/*fn bool Memory.contains(self, uint addr) @inline => addr - self.offset < self.ram.len;
 // TODO: paging, it will also need to be a cpu flag
-fn char Memory.get(self, ulong addr) @inline => self.ram[addr-self.offset:len];
-fn void Memory.set(&self, ulong addr, char new) @inline => self.ram[addr-self.offset] = new;
+fn char Memory.get(self, uint addr) @inline => self.ram[addr-self.offset:len];
+fn void Memory.set(&self, uint addr, char new) @inline => self.ram[addr-self.offset] = new;
 
-fn bool Memory.contains_range(self, ulong start_addr, ulong len) @inline => self.contains(start_addr) && self.contains(start_addr + len - 1);
-fn char[] Memory.get_range(self, ulong start_addr, ulong len) @inline => self.ram[start_addr-self.offset:len];
-fn void Memory.set_range(self, ulong start_addr, ulong len, char[] new) @inline => self.ram[start_addr-self.offset:len] = new[:len];*/
+fn bool Memory.contains_range(self, uint start_addr, uint len) @inline => self.contains(start_addr) && self.contains(start_addr + len - 1);
+fn char[] Memory.get_range(self, uint start_addr, uint len) @inline => self.ram[start_addr-self.offset:len];
+fn void Memory.set_range(self, uint start_addr, uint len, char[] new) @inline => self.ram[start_addr-self.offset:len] = new[:len];*/
 
-fn bool Memory._contains(self, ulong addr) @inline => addr - self.offset < self.ram.len;
+fn bool Memory._contains(self, uint addr) @inline => addr - self.offset < (uint)self.ram.len;
 
-fn bool Memory.contains(self, ulong start_addr, ulong len) @inline => self._contains(start_addr) && self._contains(start_addr + len - 1);
-fn char[] Memory.get(self, ulong start_addr, ulong len) @inline => self.ram[start_addr-self.offset:len];
-fn void Memory.set(self, ulong start_addr, ulong len, char[] new) @inline => self.ram[start_addr-self.offset:len] = new[:len];
+fn bool Memory.contains(self, uint start_addr, uint len) @inline => self._contains(start_addr) && self._contains(start_addr + len - 1);
+fn char[] Memory.get(self, uint start_addr, uint len) @inline => self.ram[start_addr-self.offset:len];
+fn void Memory.set(self, uint start_addr, uint len, char[] new) @inline => self.ram[start_addr-self.offset:len] = new[:len];
 
-def Register = ulong;
+def Register = uint;
 
 macro Register.write(&self, BitWidth $width, data)
 {
@@ -119,26 +119,19 @@ macro Register.write(&self, BitWidth $width, data)
 	logger::debug("Self is now %s (0x%x)", *self, *self);
 }
 
-fn void Register.write_W8(&self, char data) => *self = (*self & ~0x00000000000000ff) | @as(usz, data);
+fn void Register.write_W8(&self, char data) => *self = (*self & ~0x000000ff) | @as(uint, data);
 
-fn void Register.write_W16(&self, ushort data) => *self = (*self & ~0x000000000000ffff) | @as(usz, data);
+fn void Register.write_W16(&self, ushort data) => *self = (*self & ~0x0000ffff) | @as(uint, data);
 
-fn void Register.write_W32(&self, uint data) => *self = (*self & ~0x00000000ffffffff) | @as(usz, data);
-
-// Whoops, looks like this is a feature now
-// I should probably remove this at some point
-fn void Register.write_W64(&self, ulong data) => *self = ((Register) data).read_W64();
-
+fn void Register.write_W32(&self, uint data) => *self = data;
 
 macro Register.read(&self, BitWidth $width) => self.$eval("read_" +++ $width.nameof)();
 
-fn char Register.read_W8(self) => @as(char, self & 0x00000000000000ff);
+fn char Register.read_W8(self) => @as(char, self & 0x000000ff);
 
-fn ushort Register.read_W16(self) => @as(ushort, self & 0x000000000000ffff);
+fn ushort Register.read_W16(self) => @as(ushort, self & 0x0000ffff);
 
-fn uint Register.read_W32(self) => @as(uint, self & 0x00000000ffffffff);
-
-fn ulong Register.read_W64(self) => self;
+fn uint Register.read_W32(self) => self;
 
 bitstruct CpuFlags : Register
 {
@@ -234,7 +227,7 @@ fn int main(String[] args)
 	// io::printfn("%.4x %.4x %.4x", @common::to_usize(W16, prog[0:2]), @common::to_usize2(W16, prog[0:2]), @common::to_usize3(W16, prog[0:2]));
 
 	$if $feature(PERF):
-		usz iteration = 0;
+		uint iteration = 0;
 		Clock clock = clock::now();
 	$endif
 
@@ -243,7 +236,7 @@ fn int main(String[] args)
 	{
 		switch (inst::GET_) @jump
 		{
-			case inst::NOP: nextcase inst::BREAK;//nextcase;
+			case inst::NOP: nextcase;
 			case inst::GET:
 				// TODO: set a clock speed
 				$if $feature(DELAY):
@@ -290,6 +283,7 @@ fn int main(String[] args)
 		
 				// Execute the current instruction
 				nextcase inst.type;
+			case inst::HALT:
 			case inst::BREAK:
 				return 0;
 
@@ -370,7 +364,7 @@ macro @as_width(BitWidth $width, #expr, bool $signed = false)
 	$endif
 }
 
-macro Cpu.read_imm(&self, usz $offset, BitWidth $width, bool $signed = false)
+macro Cpu.read_imm(&self, uint $offset, BitWidth $width, bool $signed = false)
 {
 	$if $signed:
 		return @as($typefrom($width.itype),  mem.get(*self.inst_ptr + $offset, $width).get($width));
@@ -382,12 +376,12 @@ macro Cpu.read_imm(&self, usz $offset, BitWidth $width, bool $signed = false)
 <*
  @require @typeis(value, $typefrom($width.type)) ||| @typeis(value, $typefrom($width.itype))
 *>
-macro void Cpu.write_reg(&self, usz offset, BitWidth $width, value)
+macro void Cpu.write_reg(&self, uint offset, BitWidth $width, value)
 {
 	self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)].write($width, value);
 }
 
-macro Cpu.read_reg(&self, usz offset, BitWidth $width, bool $signed = false)
+macro Cpu.read_reg(&self, uint offset, BitWidth $width, bool $signed = false)
 {
 	$if $signed:
 		return @as($typefrom($width.itype), self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)].read($width));
@@ -424,7 +418,7 @@ macro Cpu.move_forward(&self, BitWidth $width, InstructionType $type, Instructio
 	$endfor*/
 }
 
-macro arg_size(ArgType type, BitWidth $width)
+macro uint arg_size(ArgType type, BitWidth $width)
 {
 	switch (type)
 	{
