@@ -27,8 +27,8 @@ def InstSize = ushort;
 
 bitstruct Instruction : ushort @littleendian
 {
-	ArgType dst : 0..1;
-	ArgType src : 2..3;
+	ArgType src : 0..1;
+	ArgType dst : 2..3;
 	Condition cond : 4..6;
 	bool has_offset : 7;
 	InstructionType type : 8..13;

@@ -290,6 +290,7 @@ fn int main(String[] args)
 			case inst::ADD:
 				cpu.inst_add(inst);
 				nextcase inst::GET;
+			// case inst::
 			default:
 				logger::error("Instruction 0x%.2x is not implemented yet", inst.type);
 				nextcase inst::BREAK;
