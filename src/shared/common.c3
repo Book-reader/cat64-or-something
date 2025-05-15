@@ -10,118 +10,59 @@ import logger;
 const MEM_SIZE = 0x02000000_0;
 
 // 8 General registers
-const NUM_REGISTERS = 13;
-const String[NUM_REGISTERS] REG_NAMES = {"r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "rsp", "esp", "scl", "scr", "flg"};
+const NUM_REGISTERS = 35;
+const String[NUM_REGISTERS] REG_NAMES = {
+	"R0 ", "R1 ", "R2 ", "R3 ", "R4 ", "R5 ", "R6 ", "R7 ",
+	"R8 ", "R9 ", "R10", "R11", "R12", "R13", "R14", "R15",
+	"R16", "R17", "R18", "R19", "R20", "R21", "R22", "R23",
+	"R24", "R25", "R26", "R27", "R28", "R29", "R30", "R31",
+	"RSP", "ESP", "RFP"};
 const REG_SIZE = 1; // Char
-const PTR_SIZE = 8; // Long
+const PTR_SIZE = 5; // Int
 const OFF_SIZE = 2; // Short
 
 $assert(ulong.sizeof == 8 && "Must be on a 64 bit system");
 
 def InstSize = ushort;
 
-// https://projectf.io/posts/riscv-cheat-sheet/
-enum InstructionType : char (String name, InstructionArgs args)
-{ // ARG1 ARG2 (SRC, DST)
-  NOP = { "NOP", args() },
-
-  ADD = { "ADD", args(REG, REG) },
-  IADD = { "IADD", args(REG, REG) },
-  ADDI = { "ADDi", args(REG, IMM) },
-  IADDI = { "IADDi", args(REG, IMM) },
-
-  SUB = { "SUB", args(REG, REG) },
-  ISUB = { "ISUB", args(REG, REG) },
-  SUBI = { "SUBi", args(REG, IMM) },
-  ISUBI = { "ISUBi", args(REG, IMM) },
-
-  MUL = { "MUL", args(REG, REG) },
-  IMUL = { "IMUL", args(REG, REG) },
-  MULI = { "MULi", args(REG, IMM) },
-  IMULI = { "IMULi", args(REG, IMM) },
-
-  DIV = { "DIV", args(REG, REG) },
-  IDIV = { "IDIV", args(REG, REG) },
-  DIVI = { "DIVi", args(REG, IMM) },
-  IDIVI = { "IDIVi", args(REG, IMM) },
-
-  MOD = { "MOD", args(REG, REG) },
-  IMOD = { "IMOD", args(REG, REG) },
-  MODI = { "MODi", args(REG, IMM) },
-  IMODI = { "IMODi", args(REG, IMM) },
-
-  JMP = { "JMP", args(IMM) },
-  JMPI = { "JMPi", args(REG) },
-  AJMP = { "AJMP", args(IMM) },
-
-  JEQ = { "JEQ", args(IMM) },
-  JNE = { "JNE", args(IMM) },
-  JGT = { "JGT", args(IMM) },
-  JGE = { "JGE", args(IMM) },
-  JLT = { "JLT", args(IMM) },
-  JLE = { "JLE", args(IMM) },
-
-  CMP = { "CMP", args(REG, REG) },
-  ICMP = { "ICMP", args(REG, REG) },
-  CMPI = { "CMPi", args(REG, IMM) },
-  ICMPI = { "ICMPi", args(REG, IMM) },
-
-  XOR = { "XOR", args(REG, REG) },
-  XORI = { "XORi", args(IMM, REG) },
-
-  AND = { "AND", args(REG, REG) },
-  ANDI = { "ANDi", args(REG, IMM) },
-
-  OR = { "OR", args(REG, REG) },
-  ORI = { "ORi", args(IMM, REG) },
-
-  NOT = { "NOT", args(REG, REG) },
-  NOTI = { "NOTi", args(IMM, REG) },
-
-  SLL = { "SLL", args(REG, REG) },
-  SLLI = { "SLLi", args(REG, IMM) },
-
-  SRL = { "SRL", args(REG, REG) },
-  SRLI = { "SRLi", args(REG, IMM) },
-
-  SRA = { "SRA", args(REG, REG) },
-  SRAI = { "SRAi", args(REG, IMM) },
-
-  BSE = { "BSE", args(REG, IMM) },
-  BUS = { "BUS", args(REG, IMM) },
-
-  PUSH = { "PUSH", args(REG) },
-  PUSHI = { "PUSHi", args(IMM) },
-
-  POP = { "POP", args(REG, REG) },
-  POPI = { "POPi", args(REG, IMM) },
-
-  CALL = { "CALL", args(IMM) },
-
-  LD = { "LD", args(REG, REG) },
-  LDI = { "LDi", args(REG, IMM) },
-
-  SD = { "SD", args(REG, REG) },
-  SDI = { "SDi", args(REG, IMM) },
-
-  MOV = { "MOV", args(REG, REG) },
-
-  RET = { "RET", args() },
-
-  SYSCALL = { "SYSCALL", args() },
-
-  EXIT = { "EXIT", args() },
-
-  DBG = { "DBG", args() },
-
-  PRINT = { "PRINT", args(REG) },
-  PRINTI = { "PRINTi", args(IMM) },
-
-  PRINTINT = { "PRINTINT", args(REG) },
-  GET_ = {"werhgegherhgeiurhei", args() },
-  GET = { "wghireiughoifwjefw", args() },
-  BREAK = { "regheughwiufhqiuewfhiw", args() },
+bitstruct Instruction : ushort @littleendian
+{
+	ArgType dst : 0..1;
+	ArgType src : 2..3;
+	Condition cond : 4..6;
+	bool has_offset : 7;
+	InstructionType type : 8..13;
+	BitWidth width : 14..15;
+/*	BitWidth width : 0..1;
+	InstructionType type : 2..7;
+	bool has_offset : 8;
+	Condition cond : 9..11;
+	ArgType src : 12..13;
+	ArgType dst : 14..15;*/
 }
+
+// typedef Condition = char;
+
+enum Condition : char
+{
+	ALWAYS,
+	IFZ,
+	IFNZ,
+	IFC, // same as: IFLT
+	IFNC, // same as: IFGTEQ
+	IFGT,
+	IFLTEQ,
+}
+
+enum ArgType : char
+{
+	REG,
+	REG_PTR,
+	IMM,
+	IMM_PTR,
+}
+
+distinct InstructionType = char;
 
 enum BitWidth : char (String suffix, inline ulong size, typeid type, typeid itype)
 {
@@ -129,35 +70,8 @@ enum BitWidth : char (String suffix, inline ulong size, typeid type, typeid ityp
   W8 = { ".8", 1, char.typeid, ichar.typeid },
   W16 = { ".16", 2, ushort.typeid, short.typeid },
   W32 = { ".32" 4, uint.typeid, int.typeid },
-  W64 = { ".64", 8, ulong.typeid, long.typeid },
 }
 
-enum ArgType : char
-{
-//  NONE,
-  REG,
-//  REGPTR,
-  IMM,
-  REGOFF
-}
-
-enum ParseArgType : char (ArgType runtime_type)
-{
-	REG = REG,
-	IMM = IMM,
-	LABEL = IMM,
-	REGOFF = REGOFF,
-}
-
-const MAX_INST_ARGS = 3;
-
-struct InstructionArgs
-{
-  usz count;
-  ArgType[MAX_INST_ARGS] arg;
-}
-
-def Tokens = List(<Token>);
 def Bytes = List(<char>);
 
 
@@ -189,33 +103,12 @@ enum TokenType : char
   EOEXPR,
 }
 
-macro InstructionArgs args(...)
-{
-  ArgType[MAX_INST_ARGS] $args;
-
-  $for (var $i = 0; $i < $vacount; $i ++)
-    $args[$i] = $vaconst[$i];
-  $endfor
-
-  return {$vacount, $args};
-}
-
 macro to_string($num) {
   char[] $res;
   $for (;$num != 0; $num = $num / 10)
     $res = { (char) ('0' + $num % 10) } +++ $res;
   $endfor
   return (String) $res;
-}
-
-enum Condition : char
-{
-  EQ,
-  NE,
-  GT,
-  GE,
-  LT,
-  LE,
 }
 
 fn bool String[].contains(&self, String pointer)
@@ -289,16 +182,22 @@ macro char[].get(self, BitWidth $width)
   $switch ($width)
     $case W8:
       return self[0];
-    $default:
+	$case W16:
+		return bitorder::read(self, UShortLE);
+	$case W32:
+		return bitorder::read(self, UIntLE);
+/*    $default:
+      
       char[] data = {0, 0, 0, 0, 0, 0, 0, 0};
       //$for (var $i = 0; $i < $width; $i++)
       // data[$i] = self[$i];
       //$endfor
       data[:$width] = self[:$width];
       logger::debug("reading value %s from %s", @as($typefrom($width.itype), *@as($typefrom($width.type)*, @as(char*, data))), data);
-      return *@as($typefrom($width.type)*, @as(char*, data));//*(@as($typefrom($width.type)*, @as(char*, self[:$width]));
+      return *@as($typefrom($width.type)*, @as(char*, data));// *(@as($typefrom($width.type)*, @as(char*, self[:$width]));
 //    $case W32:
-//      return 
+//      return
+*/
   $endswitch
 }
 
@@ -385,3 +284,147 @@ fn void char[].set_W64(self, ulong val)
 	}
 }
 
+// module common::cond;
+
+// const ALWAYS = 0b000;
+// const IFZ = 
+
+module common::inst;
+const InstructionType NOP   = 0x00;
+const InstructionType ADD   = 0x01;
+const InstructionType MUL   = 0x02;
+const InstructionType AND   = 0x03;
+const InstructionType SLA   = 0x04;
+const InstructionType SRA   = 0x05;
+const InstructionType BSE   = 0x06;
+const InstructionType CMP   = 0x07;
+const InstructionType JMP   = 0x08;
+const InstructionType RJMP  = 0x09;
+const InstructionType PUSH  = 0x0A;
+const InstructionType IN    = 0x0B;
+const InstructionType ISE   = 0x0C;
+const InstructionType MSE   = 0x0D;
+const InstructionType HALT  = 0x10;
+const InstructionType INC   = 0x11;
+const InstructionType OR    = 0x13;
+const InstructionType IMUL  = 0x14;
+const InstructionType SRL   = 0x15;
+const InstructionType BCL   = 0x16;
+const InstructionType MOV   = 0x17;
+const InstructionType CALL  = 0x18;
+const InstructionType RCALL = 0x19;
+const InstructionType POP   = 0x1A;
+const InstructionType OUT   = 0x1B;
+const InstructionType ICL   = 0x1C;
+const InstructionType MCL   = 0x1D;
+const InstructionType BRK   = 0x20;
+const InstructionType SUB   = 0x21;
+const InstructionType DIV   = 0x22;
+const InstructionType XOR   = 0x23;
+const InstructionType ROL   = 0x24;
+const InstructionType ROR   = 0x25;
+const InstructionType BTS   = 0x26;
+const InstructionType MOVZ  = 0x27;
+const InstructionType LOOP  = 0x28;
+const InstructionType RLOOP = 0x29;
+const InstructionType RET   = 0x2A;
+const InstructionType INT   = 0x2C;
+const InstructionType TLB   = 0x2D;
+const InstructionType DEC   = 0x31;
+const InstructionType REM   = 0x32;
+const InstructionType NOT   = 0x33;
+const InstructionType IDIV  = 0x34;
+const InstructionType IREM  = 0x35;
+const InstructionType ICMP  = 0x37;
+const InstructionType RTA   = 0x39;
+const InstructionType RETI  = 0x3A;
+const InstructionType FLP   = 0x3D;
+
+// it is impossible for these to be valid instructions as the instruction only has 6 bits to be stored in the instruction
+const InstructionType GET  = 0xFF;
+const InstructionType GET_ = 0xFE;
+const InstructionType BREAK = 0xFD;
+
+macro arg_count(InstructionType $type) @const
+{
+	$switch ($type)
+		$case NOP:
+		$case BRK:
+		$case RET:
+		$case RETI:
+		$case ISE:
+		$case ICL:
+		$case MSE:
+		$case MCL:
+			return 0;
+		$case MOV:
+		$case ADD:
+		$case AND:
+		$case DIV:
+		$case CMP:
+		$case IN:
+		$case OUT:
+		$case RTA:
+			return 2;
+		$case JMP:
+		$case CALL:
+		$case POP:
+		$case PUSH:
+		$case NOT:
+		$case INC:
+		$case INT:
+		$case TLB:
+		$case FLP:
+			return 1;
+/*		$case ADD  :
+		$case MUL  :
+		$case AND  :
+		$case SLA  :
+		$case SRA  :
+		$case BSE  :
+		$case CMP  :
+		$case JMP  :
+		$case RJMP :
+		$case PUSH :
+		$case IN   :
+		$case ISE  :
+		$case MSE  :
+		$case HALT :
+		$case INC  :
+		$case OR   :
+		$case IMUL :
+		$case SRL  :
+		$case BCL  :
+		$case MOV  :
+		$case CALL :
+		$case RCALL:
+		$case POP  :
+		$case OUT  :
+		$case ICL  :
+		$case MCL  :
+		$case BRK  :
+		$case SUB  :
+		$case DIV  :
+		$case XOR  :
+		$case ROL  :
+		$case ROR  :
+		$case BTS  :
+		$case MOVZ :
+		$case LOOP :
+		$case RLOOP:
+		$case RET  :
+		$case INT  :
+		$case TLB  :
+		$case DEC  :
+		$case REM  :
+		$case NOT  :
+		$case IDIV :
+		$case IREM :
+		$case ICMP :
+		$case RTA  :
+		$case RETI :
+		$case FLP  :*/
+		$default   :
+			$error("Unknown instruction");
+	$endswitch
+}
