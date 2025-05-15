@@ -349,82 +349,58 @@ macro arg_count(InstructionType $type) @const
 {
 	$switch ($type)
 		$case NOP:
+		$case ISE:
+		$case MSE:
+		$case HALT:
+		$case ICL:
+		$case MCL:
 		$case BRK:
 		$case RET:
 		$case RETI:
-		$case ISE:
-		$case ICL:
-		$case MSE:
-		$case MCL:
 			return 0;
-		$case MOV:
 		$case ADD:
+		$case MUL:
 		$case AND:
-		$case DIV:
+		$case SLA:
+		$case SRA:
+		$case BSE:
 		$case CMP:
 		$case IN:
+		$case OR:
+		$case IMUL:
+		$case SRL:
+		$case BCL:
+		$case MOV:
 		$case OUT:
+		$case SUB:
+		$case DIV:
+		$case XOR:
+		$case ROL:
+		$case ROR:
+		$case BTS:
+		$case MOVZ:
+		$case REM:
+		$case IDIV:
+		$case IREM:
+		$case ICMP:
 		$case RTA:
 			return 2;
 		$case JMP:
-		$case CALL:
-		$case POP:
+		$case RJMP:
 		$case PUSH:
-		$case NOT:
 		$case INC:
+		$case CALL:
+		$case RCALL:
+		$case POP:
+		$case LOOP:
+		$case RLOOP:
 		$case INT:
 		$case TLB:
+		$case DEC:
+		$case NOT:
 		$case FLP:
 			return 1;
-/*		$case ADD  :
-		$case MUL  :
-		$case AND  :
-		$case SLA  :
-		$case SRA  :
-		$case BSE  :
-		$case CMP  :
-		$case JMP  :
-		$case RJMP :
-		$case PUSH :
-		$case IN   :
-		$case ISE  :
-		$case MSE  :
-		$case HALT :
-		$case INC  :
-		$case OR   :
-		$case IMUL :
-		$case SRL  :
-		$case BCL  :
-		$case MOV  :
-		$case CALL :
-		$case RCALL:
-		$case POP  :
-		$case OUT  :
-		$case ICL  :
-		$case MCL  :
-		$case BRK  :
-		$case SUB  :
-		$case DIV  :
-		$case XOR  :
-		$case ROL  :
-		$case ROR  :
-		$case BTS  :
-		$case MOVZ :
-		$case LOOP :
-		$case RLOOP:
-		$case RET  :
-		$case INT  :
-		$case TLB  :
-		$case DEC  :
-		$case REM  :
-		$case NOT  :
-		$case IDIV :
-		$case IREM :
-		$case ICMP :
-		$case RTA  :
-		$case RETI :
-		$case FLP  :*/
-		$default   :
+		$default:
 			$error("Unknown instruction");
 	$endswitch
 }

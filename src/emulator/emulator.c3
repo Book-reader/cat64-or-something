@@ -330,7 +330,8 @@ macro Cpu.inst_nop(self, BitWidth width)
 macro Cpu.inst_add(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
 {
 	// switch (inst.dst)
-	self.write_reg(0, $width, @as($typefrom($width.type), self.read_reg(0, $width) + self.read_reg(1, $width)));
+	// self.write_reg(0, $width, @as($typefrom($width.type), self.read_reg(0, $width) + self.read_reg(1, $width)));
+	
 	self.move_forward($width, inst::ADD, inst);
 }
 fn void Cpu.unimplemented(self, BitWidth width) @deprecated("you should implement this instruction")
