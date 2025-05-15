@@ -23,7 +23,7 @@ const OFF_SIZE = 2; // Short
 
 $assert(usz.sizeof >= 5 && "Must be on at least a 32 bit system");
 
-def InstSize = ushort;
+alias InstSize = ushort;
 
 bitstruct Instruction : ushort @littleendian
 {
@@ -62,7 +62,7 @@ enum ArgType : char
 	IMM_PTR,
 }
 
-distinct InstructionType = char;
+typedef InstructionType = char;
 
 enum BitWidth : char (String suffix, inline ulong size, typeid type, typeid itype)
 {
@@ -72,7 +72,7 @@ enum BitWidth : char (String suffix, inline ulong size, typeid type, typeid ityp
   W32 = { ".32" 4, uint.typeid, int.typeid },
 }
 
-def Bytes = List(<char>);
+alias Bytes = List {char};
 
 
 // enum ParseArgType ()
@@ -85,7 +85,7 @@ struct Token(Printable)
   usz position;
 }
 
-fn usz! Token.to_format(&self, Formatter* formatter) @dynamic
+fn usz? Token.to_format(&self, Formatter* formatter) @dynamic
 {
   return formatter.printf("(%s:%s ('%s':%s))%s", self.line, self.position, self.lexme == "\n" ? "\\n" : self.lexme, self.type, self.type == EOEXPR ? "\n" : "");
 }
@@ -105,7 +105,7 @@ enum TokenType : char
 
 macro to_string($num) {
   char[] $res;
-  $for (;$num != 0; $num = $num / 10)
+  $for ;$num != 0; $num = $num / 10:
     $res = { (char) ('0' + $num % 10) } +++ $res;
   $endfor
   return (String) $res;
@@ -116,13 +116,13 @@ fn bool String[].contains(&self, String pointer)
 	return @ok(self.index_of(pointer));
 }
 
-fn usz! String[].index_of(&self, String pointer)
+fn usz? String[].index_of(&self, String pointer)
 {
 	foreach (i, val : self)
 	{
 		if (val == pointer) return i;
 	}
-	return SearchResult.MISSING?;
+	return NOT_FOUND?;
 }
 
 
@@ -144,7 +144,7 @@ macro @eachif(value, $Enum = void, #attribute = null; @body($matching_value)) @b
 
 macro @eachif_arr(value, $values, #attribute = null, $failable = true; @body($matching_value)) @builtin
 {
-  $foreach ($value : $values)
+  $foreach $value : $values:
     var $val_at;
     $if $stringify(#attribute) == "null":
       $val_at = $value;
@@ -179,7 +179,7 @@ macro void char[].set(self, BitWidth $width, val) => self[:$width] = @as(char*, 
 
 macro char[].get(self, BitWidth $width)
 {
-  $switch ($width)
+  $switch $width:
     $case W8:
       return self[0];
 	$case W16:
@@ -347,7 +347,7 @@ const InstructionType BREAK = 0xFD;
 
 macro arg_count(InstructionType $type) @const
 {
-	$switch ($type)
+	$switch $type:
 		$case NOP:
 		$case ISE:
 		$case MSE:

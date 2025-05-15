@@ -7,6 +7,9 @@ import std::thread;
 import std::time;
 import std::collections::list;
 
+// TODO: alias to allocator::mem once the bug is fixed
+Allocator alloc;
+
 struct ReadResult
 {
 	uint diff;
@@ -19,7 +22,7 @@ struct ReadResult
 	}
 }
 
-macro ReadResult ReadResult.new(BitWidth $width, uint diff, val) @operator(construct)
+macro ReadResult new_readresult(BitWidth $width, uint diff, val)
 {
 	ReadResult new = {.diff = diff};
 	new.$eval("as_" +++ $width.nameof) = val;
@@ -41,14 +44,12 @@ interface Addressable
 
 struct MemoryManagementUnit
 {
-	List{Addressable} memory;
+	List {Addressable} memory;
 }
 
-fn MemoryManagementUnit MemoryManagementUnit.new_init() @operator(construct)
+fn void MemoryManagementUnit.new_init(&self)
 {
-	MemoryManagementUnit new;
-	new.memory.new_init();
-	return new;
+	self.memory.init(alloc);
 }
 
 fn void MemoryManagementUnit.free(&self)
@@ -60,23 +61,18 @@ fn void MemoryManagementUnit.free(&self)
 	self.memory.free();
 }
 
-fn Addressable! MemoryManagementUnit.request(&self, uint address)
+fn Addressable? MemoryManagementUnit.request(&self, uint address)
 {
 	foreach (mem : self.memory)
 	{
 		if (mem.contains(address)) return mem;
 	}
-	return MemoryError.OUT_OF_BOUNDS?;
+	return OUT_OF_BOUNDS?;
 }
 
 fn bool MemoryManagementUnit.contains(&self, uint address) => @ok(self.request(address));
 
-fault MemoryError
-{
-	OUT_OF_BOUNDS,
-	NO_READ,
-	NO_WRITE,
-}
+faultdef OUT_OF_BOUNDS, NO_READ, NO_WRITE;
 
 struct Memory// (Addressable)
 {
@@ -110,7 +106,7 @@ fn bool Memory.contains(self, uint start_addr, uint len) @inline => self._contai
 fn char[] Memory.get(self, uint start_addr, uint len) @inline => self.ram[start_addr-self.offset:len];
 fn void Memory.set(self, uint start_addr, uint len, char[] new) @inline => self.ram[start_addr-self.offset:len] = new[:len];
 
-def Register = uint;
+alias Register = uint;
 
 macro Register.write(&self, BitWidth $width, data)
 {
@@ -170,9 +166,20 @@ Memory mem;
 // TODO: multithreading by sending data between cpu structs with an array and a mutex
 //tlocal Cpu cpu;
 
+import std::math::random;
+
+<*
+	@ensure @volatile_load(*&&false)
+*>
+macro int x()
+{
+	return rand(10);
+}
 
 fn int main(String[] args)
 {
+x();
+	alloc = allocator::mem;
 	Cpu cpu;
 	cpu.init();
 	mem.new_init(common::MEM_SIZE);
@@ -197,7 +204,7 @@ fn int main(String[] args)
 		}
 		else
 		{*/
-		prog = file::load_new(args[1])!!;
+		prog = file::load(alloc, args[1])!!;
 //		}
 	}
 	else
@@ -263,10 +270,10 @@ fn int main(String[] args)
 				logger::debug("inst: %s", mem.get(*cpu.inst_ptr, 2));
 		
 				inst = (Instruction)mem.get(*cpu.inst_ptr, 2).get(W16);
-				$foreach ($field : Instruction.membersof)
+				$foreach $field : Instruction.membersof:
 					logger::debug("inst.%s = %s", $field.nameof, inst.$eval($field.nameof));
 				$endforeach
-				logger::debug("%s -> %.2x.%.2x (0x%%.2x.0x%%.2x)", *cpu.inst_ptr, inst.type, inst.width);
+				logger::debug("%s -> %x.%s (0x%%.2x.0x%%.2x)", *cpu.inst_ptr, inst.type, inst.width);
 		//		logger::debug("%s: %.4x -> %s.%s %s, %s", *cpu.inst_ptr, @as(InstSize, inst), inst.type, inst.width, inst.type == JIF ? inst.jif_cond.nameof : inst.dst_type.nameof, inst.src_type);
 		
 		
@@ -325,7 +332,12 @@ macro Cpu.inst_add(&self, Instruction inst) => @each_width(inst.width; BitWidth 
 {
 	// switch (inst.dst)
 	// self.write_reg(0, $width, @as($typefrom($width.type), self.read_reg(0, $width) + self.read_reg(1, $width)));
-	self.set_val($width, inst, src, @add($width.type, self.get_val($width, inst, dst), self.get_val($width, inst, dst)));
+	uint off = (uint)inst.has_offset;
+	var src = self.get_val($width, inst, src);
+	// *self.inst_ptr += off + arg_size(inst.src, $width);
+	var dst = self.get_val($width, inst, dst);
+	// *self.inst_ptr += off + arg_size(inst.dst, $width);
+	self.set_val($width, inst, dst, @add($width.type, src, dst));
 	self.move_forward($width, inst::ADD, inst);
 }
 fn void Cpu.unimplemented(self, BitWidth width) @deprecated("you should implement this instruction")
@@ -337,33 +349,56 @@ fn void Cpu.unimplemented(self, BitWidth width) @deprecated("you should implemen
 	@require $typeof(val).typeid == $width.type
 	@require $stringify(#arg) == "src" || $stringify(#arg) == "dst"
 *>
-macro Cpu.set_val(&self, BitWidth $width, Instruction inst, #arg, val) @safemacro
+macro Cpu.set_val(&self, BitWidth $width, Instruction inst, #arg, val, bool $zero = false) @safemacro
 {
-	@atomic_load(val);
+	uint offset = @arg_offset($width, inst, #arg);
+	logger::debug("Current idx is %s, calculated offset is %s", *self.inst_ptr, offset);
+	$if !$zero:
+		switch (inst.#arg)
+		{
+			case REG:
+				self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)].write($width, val);
+			case REG_PTR:
+			case IMM:
+			case IMM_PTR:
+				abort("%s", inst.#arg);
+		}
+	$else
+		$error("$zero not implented yet");
+	$endif
 }
 
 <*
 logger::debug("get_val got value %s", return)
 	@require $stringify(#arg) == "src" || $stringify(#arg) == "dst"
 	@ensure $typeof(return).typeid == $width.type
-	@ensure !@ok(io::printfn("test %s", return))
 *>
 macro Cpu.get_val(&self, BitWidth $width, Instruction inst, #arg) @safemacro
 {
+	uint offset = @arg_offset($width, inst, #arg);
+	logger::debug("Current idx is %s, calculated offset is %s", *self.inst_ptr, offset);
 	switch (inst.#arg)
 	{
 		case REG:
-			return self.regs[mem.get(*self.inst_ptr, 1).get(W8)];
+			return self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)].read($width);
 		case REG_PTR:
-			return mem.get(self.regs[mem.get(*self.inst_ptr, 1).get(W8)] + mem.get(*self.inst_ptr + 1, 1).get(W8), $width).get($width);
+			return mem.get(self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)] + mem.get(*self.inst_ptr + 1, 1).get(W8), $width).get($width);
 		case IMM:
-			return mem.get(*self.inst_ptr, $width).get($width);
+			return mem.get(*self.inst_ptr + offset, $width).get($width);
 		case IMM_PTR:
-			return mem.get(mem.get(*self.inst_ptr, common::PTR_SIZE).get(W32), $width).get($width);
+			return mem.get(mem.get(*self.inst_ptr + offset, common::PTR_SIZE).get(W32), $width).get($width);
 	}
 }
 
-macro @add(typeid $type, #a, #b) => @as($typefrom($type), (#a) + (#b));
+<*
+	@ensure io::printfn("@add returned: %s", return)!! == 0
+*>
+macro @add(typeid $type, #a, #b) 
+{
+	var a = @as($typefrom($type), (#a) + (#b));
+	logger::debug("@add result: %s", a);
+	return a;
+}
 
 macro invalid_instruction(...)
 {
@@ -425,7 +460,7 @@ macro Cpu.move_forward(&self, BitWidth $width, InstructionType $type, Instructio
 	{
 		*self.inst_ptr += 2;
 	}
-	$switch (inst::arg_count($type))
+	$switch inst::arg_count($type):
 		$case 1:
 			*self.inst_ptr += arg_size(inst.src, $width);
 		$case 2:
@@ -433,17 +468,6 @@ macro Cpu.move_forward(&self, BitWidth $width, InstructionType $type, Instructio
 			*self.inst_ptr += arg_size(inst.dst, $width);
 		$case 0:
 	$endswitch
-
-	/*$for (var $i = 0; $i < $inst.args.count; $i++)
-		$switch ($inst.args.arg[$i])
-			$case REG:
-				*self.inst_ptr += common::REG_SIZE;
-			$case REGOFF:
-				*self.inst_ptr += common::REG_SIZE + common::OFF_SIZE;
-			$case IMM:
-				*self.inst_ptr += $width.size;
-		$endswitch
-	$endfor*/
 }
 
 macro uint arg_size(ArgType type, BitWidth $width)
@@ -459,3 +483,8 @@ macro uint arg_size(ArgType type, BitWidth $width)
 			return common::PTR_SIZE;
 	}
 }
+
+<*
+	@require $stringify(#arg) == "src" || $stringify(#arg) == "dst"
+*>
+macro uint @arg_offset(BitWidth $width, Instruction inst, #arg) => @select($stringify(#arg) == "src", 0, (uint)inst.has_offset + arg_size(inst.src, $width));
