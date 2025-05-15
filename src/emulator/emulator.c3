@@ -321,23 +321,49 @@ fn int main(String[] args)
 	return 0;
 }
 
-macro Cpu.inst_nop(self, BitWidth width)
-{
-	return;
-}
-
-
 macro Cpu.inst_add(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
 {
 	// switch (inst.dst)
 	// self.write_reg(0, $width, @as($typefrom($width.type), self.read_reg(0, $width) + self.read_reg(1, $width)));
-	
+	self.set_val($width, inst, src, @add($width.type, self.get_val($width, inst, dst), self.get_val($width, inst, dst)));
 	self.move_forward($width, inst::ADD, inst);
 }
 fn void Cpu.unimplemented(self, BitWidth width) @deprecated("you should implement this instruction")
 {
 	logger::panic("Instruction %.2x not implemented yet", mem.get(*self.inst_ptr - 2, 2).get(W16));
 }
+
+<*
+	@require $typeof(val).typeid == $width.type
+	@require $stringify(#arg) == "src" || $stringify(#arg) == "dst"
+*>
+macro Cpu.set_val(&self, BitWidth $width, Instruction inst, #arg, val) @safemacro
+{
+	@atomic_load(val);
+}
+
+<*
+logger::debug("get_val got value %s", return)
+	@require $stringify(#arg) == "src" || $stringify(#arg) == "dst"
+	@ensure $typeof(return).typeid == $width.type
+	@ensure !@ok(io::printfn("test %s", return))
+*>
+macro Cpu.get_val(&self, BitWidth $width, Instruction inst, #arg) @safemacro
+{
+	switch (inst.#arg)
+	{
+		case REG:
+			return self.regs[mem.get(*self.inst_ptr, 1).get(W8)];
+		case REG_PTR:
+			return mem.get(self.regs[mem.get(*self.inst_ptr, 1).get(W8)] + mem.get(*self.inst_ptr + 1, 1).get(W8), $width).get($width);
+		case IMM:
+			return mem.get(*self.inst_ptr, $width).get($width);
+		case IMM_PTR:
+			return mem.get(mem.get(*self.inst_ptr, common::PTR_SIZE).get(W32), $width).get($width);
+	}
+}
+
+macro @add(typeid $type, #a, #b) => @as($typefrom($type), (#a) + (#b));
 
 macro invalid_instruction(...)
 {

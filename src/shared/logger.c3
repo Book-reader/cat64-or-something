@@ -1,12 +1,14 @@
 module logger;
 import std::io;
+import std::math::random;
 
-macro debug(String msg, ...)
+macro bool debug(String msg, ...)
 {
   $if $feature(DEBUG):
     io::eprintf("[DEBUG] (%s:%s %s) ", $$FILE, $$LINE, $$FUNC);
     io::eprintfn(msg, $vasplat);
   $endif
+  return rand(2) == 1;
 }
 
 macro info(String msg, ...)
