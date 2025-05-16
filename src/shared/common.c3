@@ -7,16 +7,23 @@ import std::collections::list;
 import logger;
 
 // 16 Mib of memory
-const MEM_SIZE = 0x02000000_0;
+const RAM_SIZE = 0x04000000; //  64 MiB
+const ROM_SIZE = 0x00080000; // 512 KiB
+const ROM_START = 0xF0000000;
+
+const MEM_TOTAL = RAM_SIZE + ROM_SIZE;
+
+const DEFAULT_INST_PTR = ROM_START;
+const DEFAULT_STACK_PTR = 0;
 
 // 8 General registers
-const NUM_REGISTERS = 35;
+const NUM_REGISTERS = 36;
 const String[NUM_REGISTERS] REG_NAMES = {
 	"R0 ", "R1 ", "R2 ", "R3 ", "R4 ", "R5 ", "R6 ", "R7 ",
 	"R8 ", "R9 ", "R10", "R11", "R12", "R13", "R14", "R15",
 	"R16", "R17", "R18", "R19", "R20", "R21", "R22", "R23",
 	"R24", "R25", "R26", "R27", "R28", "R29", "R30", "R31",
-	"RSP", "ESP", "RFP"};
+	"RSP", "ESP", "RFP", "RIP"};
 const REG_SIZE = 1; // Char
 const PTR_SIZE = 5; // Int
 const OFF_SIZE = 2; // Short
@@ -69,7 +76,7 @@ enum BitWidth : char (String suffix, inline ulong size, typeid type, typeid ityp
 //  NONE = { "", 0, void.typeid },
   W8 = { ".8", 1, char.typeid, ichar.typeid },
   W16 = { ".16", 2, ushort.typeid, short.typeid },
-  W32 = { ".32" 4, uint.typeid, int.typeid },
+  W32 = { ".32", 4, uint.typeid, int.typeid },
 }
 
 alias Bytes = List {char};
@@ -345,9 +352,9 @@ const InstructionType GET  = 0xFF;
 const InstructionType GET_ = 0xFE;
 const InstructionType BREAK = 0xFD;
 
-macro arg_count(InstructionType $type) @const
+macro InstructionType.arg_count($self) @const
 {
-	$switch $type:
+	$switch $self:
 		$case NOP:
 		$case ISE:
 		$case MSE:
@@ -403,4 +410,111 @@ macro arg_count(InstructionType $type) @const
 		$default:
 			$error("Unknown instruction");
 	$endswitch
+}
+
+fn String InstructionType.get_name(self)
+{
+	switch (self)
+	{
+		case NOP:
+			return "NOP";
+		case ADD:
+			return "ADD";
+		case MUL:
+			return "MUL";
+		case AND:
+			return "AND";
+		case SLA:
+			return "SLA";
+		case SRA:
+			return "SRA";
+		case BSE:
+			return "BSE";
+		case CMP:
+			return "CMP";
+		case JMP:
+			return "JMP";
+		case RJMP:
+			return "RJMP";
+		case PUSH:
+			return "PUSH";
+		case IN:
+			return "IN";
+		case ISE:
+			return "ISE";
+		case MSE:
+			return "MSE";
+		case HALT:
+			return "HALT";
+		case INC:
+			return "INC";
+		case OR:
+			return "OR";
+		case IMUL:
+			return "IMUL";
+		case SRL:
+			return "SRL";
+		case BCL:
+			return "BCL";
+		case MOV:
+			return "MOV";
+		case CALL:
+			return "CALL";
+		case RCALL:
+			return "RCALL";
+		case POP:
+			return "POP";
+		case OUT:
+			return "OUT";
+		case ICL:
+			return "ICL";
+		case MCL:
+			return "MCL";
+		case BRK:
+			return "BRK";
+		case SUB:
+			return "SUB";
+		case DIV:
+			return "DIV";
+		case XOR:
+			return "XOR";
+		case ROL:
+			return "ROL";
+		case ROR:
+			return "ROR";
+		case BTS:
+			return "BTS";
+		case MOVZ:
+			return "MOVZ";
+		case LOOP:
+			return "LOOP";
+		case RLOOP:
+			return "RLOOP";
+		case RET:
+			return "RET";
+		case INT:
+			return "INT";
+		case TLB:
+			return "TLB";
+		case DEC:
+			return "DEC";
+		case REM:
+			return "REM";
+		case NOT:
+			return "NOT";
+		case IDIV:
+			return "IDIV";
+		case IREM:
+			return "IREM";
+		case ICMP:
+			return "ICMP";
+		case RTA:
+			return "RTA";
+		case RETI:
+			return "RETI";
+		case FLP:
+			return "FLP";
+		default:
+			unreachable("unknown or unsupported InstructionType %s", self);
+	}
 }

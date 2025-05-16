@@ -7,8 +7,7 @@ import std::thread;
 import std::time;
 import std::collections::list;
 
-// TODO: alias to allocator::mem once the bug is fixed
-Allocator alloc;
+alias alloc = allocator::mem;
 
 struct ReadResult
 {
@@ -31,7 +30,7 @@ macro ReadResult new_readresult(BitWidth $width, uint diff, val)
 
 macro ReadResult.get(self, BitWidth $width) => self.$eval("as_" +++ $width.nameof);
 
-interface Addressable
+/*interface Addressable
 {
 	fn void free();
 	fn char get(uint address);
@@ -73,20 +72,20 @@ fn Addressable? MemoryManagementUnit.request(&self, uint address)
 fn bool MemoryManagementUnit.contains(&self, uint address) => @ok(self.request(address));
 
 faultdef OUT_OF_BOUNDS, NO_READ, NO_WRITE;
-
+*/
 struct Memory// (Addressable)
 {
 	char[] ram;
-	uint offset;
+	//uint offset;
 }
 
-fn void Memory.new_init(&self, uint size, uint offset = 0)
+fn void Memory.new_init(&self, uint size)
 {
-	self.offset = offset;
+	// self.offset = offset;
 	self.ram = mem::new_array(char, size);
 }
 
-fn void Memory.free(&self) @dynamic
+fn void Memory.free(&self) //@dynamic
 {
 	mem::free(self.ram);
 }
@@ -100,11 +99,11 @@ fn bool Memory.contains_range(self, uint start_addr, uint len) @inline => self.c
 fn char[] Memory.get_range(self, uint start_addr, uint len) @inline => self.ram[start_addr-self.offset:len];
 fn void Memory.set_range(self, uint start_addr, uint len, char[] new) @inline => self.ram[start_addr-self.offset:len] = new[:len];*/
 
-fn bool Memory._contains(self, uint addr) @inline => addr - self.offset < (uint)self.ram.len;
+// fn bool Memory._contains(self, uint addr) @inline => addr - self.offset < (uint)self.ram.len;
 
-fn bool Memory.contains(self, uint start_addr, uint len) @inline => self._contains(start_addr) && self._contains(start_addr + len - 1);
-fn char[] Memory.get(self, uint start_addr, uint len) @inline => self.ram[start_addr-self.offset:len];
-fn void Memory.set(self, uint start_addr, uint len, char[] new) @inline => self.ram[start_addr-self.offset:len] = new[:len];
+// fn bool Memory.contains(self, uint start_addr, uint len) @inline => self._contains(start_addr) && self._contains(start_addr + len - 1);
+// fn char[] Memory.get(self, uint start_addr, uint len) @inline => self.ram[start_addr-self.offset:len];
+// fn void Memory.set(self, uint start_addr, uint len, char[] new) @inline => self.ram[start_addr-self.offset:len] = new[:len];
 
 alias Register = uint;
 
@@ -133,56 +132,75 @@ bitstruct CpuFlags : Register
 {
 	bool zero : 0;
 	bool carry : 1;
-	bool overflow : 2;
-	bool paging : 3;
+	bool exception_sp : 2;
+	bool interrupt : 3;
+	bool mmu : 4;
+	bool page_directort : 5;
 }
 
 struct Cpu
 {
 	// The address of the current instruction in memory
-	Register* inst_ptr; // a pointer to regs[9];
-	Register* stack_ptr; // A pointer to regs[8];
-	Register* syscl_addr; // A pointer to regs[10];
-	Register* syscl_ret; // A pointer to regs[11];
-	CpuFlags* flags;
+	Register* stack_ptr; // A pointer to regs[32];
+	Register* exception_ptr; // A pointer to regs[33];
+	Register* frame_ptr; // A pointer to regs[34];
+	Register* inst_ptr; // a pointer to regs[35];
+	CpuFlags flags;
 	Register[common::NUM_REGISTERS] regs;
-	// TODO: make these a register, but have the pointer cast to a bitstruct containing these and other flags
-//	bool f_zero;
-	// if gt
-//	bool f_carry;
+}
+
+<*
+	@require len == buf.len
+*>
+fn void Cpu.mem_set(&self, uint start, uint len, char[] buf) @inline
+{
+	if (!self.flags.mmu)
+	{
+		mem.ram[start:len] = buf[:len];
+	}
+	else
+	{
+		abort("MMU not implemented yet :3");
+	}
+}
+
+<*
+	@ensure return.len == len
+*>
+fn char[] Cpu.mem_get(&self, uint start, uint len) @inline
+{
+	// TODO: make this unlikely using whatever stdlib macro
+	if (!self.flags.mmu)
+	{
+		return mem.ram[start:len];
+	}
+	else
+	{
+		abort("MMU not implemented yet :3");
+	}
 }
 
 fn void Cpu.init(&self)
 {
 	self.regs = {};
-	self.inst_ptr = &self.regs[9];
-	self.stack_ptr = &self.regs[8];
-	self.syscl_addr = &self.regs[10];
-	self.syscl_ret = &self.regs[11];
-	self.flags = (CpuFlags*)&self.regs[12];
+	self.stack_ptr = &self.regs[32];
+	self.exception_ptr = &self.regs[33];
+	self.frame_ptr = &self.regs[34];
+	self.inst_ptr = &self.regs[35];
+	*self.inst_ptr = common::DEFAULT_INST_PTR;
+	*self.stack_ptr = common::DEFAULT_STACK_PTR;
+	self.flags.mmu = true;
 }
 
 Memory mem;
 // TODO: multithreading by sending data between cpu structs with an array and a mutex
 //tlocal Cpu cpu;
 
-import std::math::random;
-
-<*
-	@ensure @volatile_load(*&&false)
-*>
-macro int x()
-{
-	return rand(10);
-}
-
 fn int main(String[] args)
 {
-x();
-	alloc = allocator::mem;
 	Cpu cpu;
 	cpu.init();
-	mem.new_init(common::MEM_SIZE);
+	mem.new_init(common::MEM_TOTAL);
 	defer mem.free();
 	InstructionType test = inst::JMP;
 	BitWidth test2 = W32;
@@ -196,6 +214,9 @@ x();
 
 	char[] prog;
 
+	usz max_cycles;
+	usz iters;
+
 	if (args.len > 1)
 	{
 /*		if (args[0] == "test")
@@ -205,6 +226,11 @@ x();
 		else
 		{*/
 		prog = file::load(alloc, args[1])!!;
+
+		if (args.len > 2)
+		{
+			max_cycles = args[2].to_int()!!;
+		}
 //		}
 	}
 	else
@@ -214,7 +240,7 @@ x();
 	defer if (args.len > 1 && args[0] != "test") free(prog);
 
 
-	mem.set(0, prog.len, prog);
+	cpu.mem_set(common::DEFAULT_INST_PTR, prog.len, prog);
 
 /*	if (args.len > 2)
 	{
@@ -227,7 +253,7 @@ x();
 	}*/
 
 
-	logger::debug("Executing (%s b): %h", prog.len, prog);
+	logger::debug("Executing (%s b): %h", prog.len, prog[..prog.len < 200 ? prog.len : 200]);
 
 	bool running = true;
 
@@ -245,6 +271,12 @@ x();
 		{
 			case inst::NOP: nextcase;
 			case inst::GET:
+				iters ++;
+				if (iters == max_cycles)
+				{
+					logger::info("Hit max_cycles of %s, exiting", max_cycles);
+					nextcase inst::BREAK;
+				}
 				// TODO: set a clock speed
 				$if $feature(DELAY):
 					thread::sleep(1000000);
@@ -267,13 +299,13 @@ x();
 					}
 		//			if (iteration % 5000000 == 0) io::printfn("CPU Cycle: %s", iteration);
 				$endif
-				logger::debug("inst: %s", mem.get(*cpu.inst_ptr, 2));
+				logger::debug("inst: %s", cpu.mem_get(*cpu.inst_ptr, 2));
 		
-				inst = (Instruction)mem.get(*cpu.inst_ptr, 2).get(W16);
+				inst = (Instruction)cpu.mem_get(*cpu.inst_ptr, 2).get(W16);
 				$foreach $field : Instruction.membersof:
 					logger::debug("inst.%s = %s", $field.nameof, inst.$eval($field.nameof));
 				$endforeach
-				logger::debug("%s -> %x.%s (0x%%.2x.0x%%.2x)", *cpu.inst_ptr, inst.type, inst.width);
+				logger::debug("%s -> %s.%s (0x%%.2x.0x%%.2x)", *cpu.inst_ptr, inst.type.get_name(), inst.width);
 		//		logger::debug("%s: %.4x -> %s.%s %s, %s", *cpu.inst_ptr, @as(InstSize, inst), inst.type, inst.width, inst.type == JIF ? inst.jif_cond.nameof : inst.dst_type.nameof, inst.src_type);
 		
 		
@@ -289,17 +321,44 @@ x();
 				*cpu.inst_ptr += 2;
 		
 				// Execute the current instruction
-				nextcase inst.type;
+				if (cpu.should_execute(inst))
+				{
+					nextcase inst.type;
+				}
+				else
+				{
+					nextcase inst::GET;
+				}
 			case inst::HALT:
 			case inst::BREAK:
+				foreach (i, reg : cpu.regs)
+				{
+					logger::debug("%s: %.16x", common::REG_NAMES[i], reg);
+				}
 				return 0;
 
 			case inst::ADD:
 				cpu.inst_add(inst);
 				nextcase inst::GET;
-			// case inst::
+			case inst::SUB:
+				cpu.inst_sub(inst);
+				nextcase inst::GET;
+			case inst::MOV:
+				cpu.inst_mov(inst);
+				nextcase inst::GET;
+			case inst::CMP:
+				cpu.inst_cmp(inst);
+				nextcase inst::GET;
+			case inst::JMP:
+				cpu.inst_jmp(inst);
+				nextcase inst::GET;
+			case inst::MCL:
+				cpu.flags.mmu = false;
+				nextcase inst::GET;
+			case inst::MSE:
+				cpu.flags.mmu = true;
 			default:
-				logger::error("Instruction 0x%.2x is not implemented yet", inst.type);
+				logger::error("Instruction %s is not implemented yet", inst.type.get_name());
 				nextcase inst::BREAK;
 
 /*			case PRINTI:
@@ -328,22 +387,72 @@ x();
 	return 0;
 }
 
+fn bool Cpu.should_execute(&self, Instruction inst) @inline
+{
+	switch (inst.cond)
+	{
+		case ALWAYS:
+			return true;
+		case IFZ:
+			return self.flags.zero;
+		case IFNZ:
+			return !self.flags.zero;
+		case IFC: // same as: IFLT
+			return self.flags.carry; 
+		case IFNC: // same as: IFGTEQ
+			return !self.flags.carry;
+		case IFGT:
+			return !self.flags.zero && !self.flags.carry;
+		case IFLTEQ:
+			return self.flags.zero || self.flags.carry;
+			
+	}
+}
+
 macro Cpu.inst_add(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
 {
-	// switch (inst.dst)
-	// self.write_reg(0, $width, @as($typefrom($width.type), self.read_reg(0, $width) + self.read_reg(1, $width)));
-	uint off = (uint)inst.has_offset;
 	var src = self.get_val($width, inst, src);
-	// *self.inst_ptr += off + arg_size(inst.src, $width);
 	var dst = self.get_val($width, inst, dst);
-	// *self.inst_ptr += off + arg_size(inst.dst, $width);
-	self.set_val($width, inst, dst, @add($width.type, src, dst));
+	logger::debug("Adding %s and %s", dst, src);
+	self.set_val($width, inst, dst, @as($typefrom($width.type), dst + src));
 	self.move_forward($width, inst::ADD, inst);
 }
-fn void Cpu.unimplemented(self, BitWidth width) @deprecated("you should implement this instruction")
+
+macro Cpu.inst_sub(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
 {
-	logger::panic("Instruction %.2x not implemented yet", mem.get(*self.inst_ptr - 2, 2).get(W16));
+	var src = self.get_val($width, inst, src);
+	var dst = self.get_val($width, inst, dst);
+	logger::debug("Subtracting %s and %s", dst, src);
+	self.set_val($width, inst, dst, @as($typefrom($width.type), dst - src));
+	self.move_forward($width, inst::SUB, inst);
 }
+
+macro Cpu.inst_mov(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
+{
+	var src = self.get_val($width, inst, src);
+	logger::debug("Moving %s", src);
+	self.set_val($width, inst, dst, src);
+	self.move_forward($width, inst::MOV, inst);
+}
+
+macro Cpu.inst_cmp(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
+{
+	var src = self.get_val($width, inst, src);
+	var dst = self.get_val($width, inst, dst);
+	logger::debug("Comparing %s and %s", src, dst);
+	self.flags.zero = src == dst;
+	self.flags.carry = src > dst;
+	self.move_forward($width, inst::MOV, inst);
+}
+
+macro Cpu.inst_jmp(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
+{
+	var src = self.get_val($width, inst, src);
+	logger::debug("Jmping to %s", src);
+	*self.inst_ptr = src;
+	// self.move_forward($width, inst::JMP, inst);
+}
+
 
 <*
 	@require $typeof(val).typeid == $width.type
@@ -352,12 +461,12 @@ fn void Cpu.unimplemented(self, BitWidth width) @deprecated("you should implemen
 macro Cpu.set_val(&self, BitWidth $width, Instruction inst, #arg, val, bool $zero = false) @safemacro
 {
 	uint offset = @arg_offset($width, inst, #arg);
-	logger::debug("Current idx is %s, calculated offset is %s", *self.inst_ptr, offset);
+	// logger::debug("Current idx is %s, calculated offset is %s", *self.inst_ptr, offset);
 	$if !$zero:
 		switch (inst.#arg)
 		{
 			case REG:
-				self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)].write($width, val);
+				self.regs[self.mem_get(*self.inst_ptr + offset, 1).get(W8)].write($width, val);
 			case REG_PTR:
 			case IMM:
 			case IMM_PTR:
@@ -369,24 +478,23 @@ macro Cpu.set_val(&self, BitWidth $width, Instruction inst, #arg, val, bool $zer
 }
 
 <*
-logger::debug("get_val got value %s", return)
 	@require $stringify(#arg) == "src" || $stringify(#arg) == "dst"
 	@ensure $typeof(return).typeid == $width.type
 *>
 macro Cpu.get_val(&self, BitWidth $width, Instruction inst, #arg) @safemacro
 {
 	uint offset = @arg_offset($width, inst, #arg);
-	logger::debug("Current idx is %s, calculated offset is %s", *self.inst_ptr, offset);
+	// logger::debug("Current idx is %s, calculated offset is %s", *self.inst_ptr, offset);
 	switch (inst.#arg)
 	{
 		case REG:
-			return self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)].read($width);
+			return self.regs[self.mem_get(*self.inst_ptr + offset, 1).get(W8)].read($width);
 		case REG_PTR:
-			return mem.get(self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)] + mem.get(*self.inst_ptr + 1, 1).get(W8), $width).get($width);
+			return self.mem_get(self.regs[self.mem_get(*self.inst_ptr + offset, 1).get(W8)] + self.mem_get(*self.inst_ptr + 1, 1).get(W8), $width).get($width);
 		case IMM:
-			return mem.get(*self.inst_ptr + offset, $width).get($width);
+			return self.mem_get(*self.inst_ptr + offset, $width).get($width);
 		case IMM_PTR:
-			return mem.get(mem.get(*self.inst_ptr + offset, common::PTR_SIZE).get(W32), $width).get($width);
+			return self.mem_get(self.mem_get(*self.inst_ptr + offset, common::PTR_SIZE).get(W32), $width).get($width);
 	}
 }
 
@@ -430,9 +538,9 @@ macro @as_width(BitWidth $width, #expr, bool $signed = false)
 macro Cpu.read_imm(&self, uint $offset, BitWidth $width, bool $signed = false)
 {
 	$if $signed:
-		return @as($typefrom($width.itype),  mem.get(*self.inst_ptr + $offset, $width).get($width));
+		return @as($typefrom($width.itype),  self.mem_get(*self.inst_ptr + $offset, $width).get($width));
 	$else
-		return @as($typefrom($width.itype), mem.get(*self.inst_ptr + $offset, $width).get($width));
+		return @as($typefrom($width.itype), self.mem_get(*self.inst_ptr + $offset, $width).get($width));
 	$endif
 }
 
@@ -441,15 +549,15 @@ macro Cpu.read_imm(&self, uint $offset, BitWidth $width, bool $signed = false)
 *>
 macro void Cpu.write_reg(&self, uint offset, BitWidth $width, value)
 {
-	self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)].write($width, value);
+	self.regs[self.mem_get(*self.inst_ptr + offset, 1).get(W8)].write($width, value);
 }
 
 macro Cpu.read_reg(&self, uint offset, BitWidth $width, bool $signed = false)
 {
 	$if $signed:
-		return @as($typefrom($width.itype), self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)].read($width));
+		return @as($typefrom($width.itype), self.regs[self.mem_get(*self.inst_ptr + offset, 1).get(W8)].read($width));
 	$else
-		return @as($typefrom($width.type), self.regs[mem.get(*self.inst_ptr + offset, 1).get(W8)].read($width));
+		return @as($typefrom($width.type), self.regs[self.mem_get(*self.inst_ptr + offset, 1).get(W8)].read($width));
 	$endif
 }
 
@@ -460,7 +568,7 @@ macro Cpu.move_forward(&self, BitWidth $width, InstructionType $type, Instructio
 	{
 		*self.inst_ptr += 2;
 	}
-	$switch inst::arg_count($type):
+	$switch $type.arg_count():
 		$case 1:
 			*self.inst_ptr += arg_size(inst.src, $width);
 		$case 2:
