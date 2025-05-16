@@ -73,21 +73,66 @@ fn bool MemoryManagementUnit.contains(&self, uint address) => @ok(self.request(a
 
 faultdef OUT_OF_BOUNDS, NO_READ, NO_WRITE;
 */
+
+
+// Quick and dirty for now
+/*struct Mmu
+{
+	int x;
+}*/
+
+fn char[] mmu_get(/*&self, */uint addr, uint len) @inline
+{
+	// cannot have overlap
+	if (addr < common::RAM_SIZE && addr + len - 1 <= common::RAM_SIZE)
+	{
+		return mem.ram[addr:len];
+	}
+	else if (addr >= common::ROM_START && addr + len - 1 <= common::ROM_START + common::ROM_SIZE)
+	{
+		return mem.rom[addr-common::ROM_START:len];
+	}
+	else
+	{
+		abort("Out of range: 0x%.8x:%s", addr, len);
+	}
+}
+
+fn void mmu_set(uint addr, uint len, char[] buf) @inline
+{
+	// cannot have overlap
+	if (addr < common::RAM_SIZE && addr + len - 1 <= common::RAM_SIZE)
+	{
+		mem.ram[addr:len] = buf[:len];
+	}
+	else if (addr >= common::ROM_START && addr + len - 1 <= common::ROM_START + common::ROM_SIZE)
+	{
+		mem.rom[addr-common::ROM_START:len] = buf[:len];
+	}
+	else
+	{
+		abort("Out of range: 0x%.8x:%s", addr, len);
+	}
+}
+
 struct Memory// (Addressable)
 {
 	char[] ram;
+	char[] rom;
 	//uint offset;
 }
 
-fn void Memory.new_init(&self, uint size)
+fn void Memory.init(&self)
 {
 	// self.offset = offset;
-	self.ram = mem::new_array(char, size);
+	self.ram = mem::new_array(char, common::RAM_SIZE);
+	self.rom = mem::new_array(char, common::ROM_SIZE);
 }
 
 fn void Memory.free(&self) //@dynamic
 {
 	mem::free(self.ram);
+	mem::free(self.rom);
 }
 
 /*fn bool Memory.contains(self, uint addr) @inline => addr - self.offset < self.ram.len;
@@ -154,14 +199,15 @@ struct Cpu
 *>
 fn void Cpu.mem_set(&self, uint start, uint len, char[] buf) @inline
 {
-	if (!self.flags.mmu)
-	{
-		mem.ram[start:len] = buf[:len];
-	}
-	else
-	{
-		abort("MMU not implemented yet :3");
-	}
+	//if (!self.flags.mmu)
+	//{
+	//	mem.ram[start:len] = buf[:len];
+	//}
+	//else
+	//{
+		mmu_set(start, len, buf);
+		// abort("MMU not implemented yet :3");
+	//}
 }
 
 <*
@@ -170,14 +216,15 @@ fn void Cpu.mem_set(&self, uint start, uint len, char[] buf) @inline
 fn char[] Cpu.mem_get(&self, uint start, uint len) @inline
 {
 	// TODO: make this unlikely using whatever stdlib macro
-	if (!self.flags.mmu)
-	{
-		return mem.ram[start:len];
-	}
-	else
-	{
-		abort("MMU not implemented yet :3");
-	}
+	//if (!self.flags.mmu)
+	//{
+	//	return mem.ram[start:len];
+	//}
+	//else
+	//{
+		return mmu_get(start, len);
+		// abort("MMU not implemented yet :3");
+	//}
 }
 
 fn void Cpu.init(&self)
@@ -196,11 +243,13 @@ Memory mem;
 // TODO: multithreading by sending data between cpu structs with an array and a mutex
 //tlocal Cpu cpu;
 
+// TODO: make all get instructions return a char[] so I can just do 'get_arg1()[:len] = get_arg2()[:len]' instead of all the bitmasks and switch statements and macros
+// it will make memory to memory operations faster & I can have a reg->reg version as well
 fn int main(String[] args)
 {
 	Cpu cpu;
 	cpu.init();
-	mem.new_init(common::MEM_TOTAL);
+	mem.init();
 	defer mem.free();
 	InstructionType test = inst::JMP;
 	BitWidth test2 = W32;
@@ -240,7 +289,9 @@ fn int main(String[] args)
 	defer if (args.len > 1 && args[0] != "test") free(prog);
 
 
-	cpu.mem_set(common::DEFAULT_INST_PTR, prog.len, prog);
+	// cpu.mem_set(common::DEFAULT_INST_PTR, prog.len, prog);
+	*cpu.inst_ptr = 0;
+	cpu.mem_set(0, prog.len, prog);
 
 /*	if (args.len > 2)
 	{
@@ -253,7 +304,7 @@ fn int main(String[] args)
 	}*/
 
 
-	logger::debug("Executing (%s b): %h", prog.len, prog[..prog.len < 200 ? prog.len : 200]);
+	logger::debug("Executing (%s b): %h", prog.len, prog[:prog.len < 200 ? prog.len : 200]);
 
 	bool running = true;
 
@@ -299,13 +350,21 @@ fn int main(String[] args)
 					}
 		//			if (iteration % 5000000 == 0) io::printfn("CPU Cycle: %s", iteration);
 				$endif
-				logger::debug("inst: %s", cpu.mem_get(*cpu.inst_ptr, 2));
-		
+				logger::debug("Nearby mem: %s", cpu.mem_get(*cpu.inst_ptr, 10));
+				
+				// logger::debug("As instrs : %s", @as(Instruction[5]*, @as(char*, cpu.mem_get(*cpu.inst_ptr, 10)))[0][..]);
 				inst = (Instruction)cpu.mem_get(*cpu.inst_ptr, 2).get(W16);
-				$foreach $field : Instruction.membersof:
-					logger::debug("inst.%s = %s", $field.nameof, inst.$eval($field.nameof));
-				$endforeach
-				logger::debug("%s -> %s.%s (0x%%.2x.0x%%.2x)", *cpu.inst_ptr, inst.type.get_name(), inst.width);
+
+				// $foreach $field : Instruction.membersof:
+				// 	logger::debug("inst.%s = %s", $field.nameof, inst.$eval($field.nameof));
+				// $endforeach
+				logger::debug("%.8x -> %s", *cpu.inst_ptr, inst);
+
+				@each_width(inst.width; BitWidth $width)
+				{
+					uint addr = *cpu.inst_ptr + 2 + arg_size(inst.src, $width) + arg_size(inst.dst, $width) + (inst.has_offset ? 2 : 0);
+					logger::debug("Next instruction at %.8x : %s", addr, (Instruction)cpu.mem_get(addr, 2).get(W16));
+				};
 		//		logger::debug("%s: %.4x -> %s.%s %s, %s", *cpu.inst_ptr, @as(InstSize, inst), inst.type, inst.width, inst.type == JIF ? inst.jif_cond.nameof : inst.dst_type.nameof, inst.src_type);
 		
 		
@@ -333,7 +392,7 @@ fn int main(String[] args)
 			case inst::BREAK:
 				foreach (i, reg : cpu.regs)
 				{
-					logger::debug("%s: %.16x", common::REG_NAMES[i], reg);
+					logger::info("%s: %.8x", common::REG_NAMES[i], reg);
 				}
 				return 0;
 
@@ -357,6 +416,22 @@ fn int main(String[] args)
 				nextcase inst::GET;
 			case inst::MSE:
 				cpu.flags.mmu = true;
+				nextcase inst::GET;
+			case inst::OUT:
+				cpu.inst_out(inst);
+				nextcase inst::GET;
+			case inst::CALL:
+				cpu.inst_call(inst);
+				nextcase inst::GET;
+			case inst::RET:
+				cpu.inst_ret(inst);
+				nextcase inst::GET;
+			case inst::ISE:
+				cpu.flags.interrupt = true;
+				nextcase inst::GET;
+			case inst::ICL:
+				cpu.flags.interrupt = false;
+				nextcase inst::GET;
 			default:
 				logger::error("Instruction %s is not implemented yet", inst.type.get_name());
 				nextcase inst::BREAK;
@@ -448,11 +523,62 @@ macro Cpu.inst_cmp(&self, Instruction inst) => @each_width(inst.width; BitWidth 
 macro Cpu.inst_jmp(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
 {
 	var src = self.get_val($width, inst, src);
-	logger::debug("Jmping to %s", src);
+	logger::debug("Jmping to 0x%.8x", src);
 	*self.inst_ptr = src;
 	// self.move_forward($width, inst::JMP, inst);
 }
 
+extern fn CInt putchar(CInt c);
+
+macro Cpu.inst_out(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
+{
+	var src = self.get_val($width, inst, src);
+	var dst = self.get_val($width, inst, dst);
+	if (dst != 0)
+	{
+		logger::warn("Out to not stdout is not supported yet: 0x%.8x", dst);
+	}
+	else
+	{
+		putchar((CInt)src) @inline;
+	}
+	// TODO: have a macro that wraps this & does something like: self.move_forward($width, $eval("inst::" +++ @to_upper($$FUNC[5..])), inst;
+	self.move_forward($width, inst::OUT, inst);
+}
+
+macro Cpu.inst_call(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
+{
+	var src = self.get_val($width, inst, src);
+	self.move_forward($width, inst::CALL, inst);
+	self._push(W32, *self.inst_ptr, false);
+	logger::debug("Jmping to 0x%.8x", src);
+	*self.inst_ptr = src;
+}
+
+macro Cpu.inst_ret(&self, Instruction inst)
+{
+	var src = self._pop(W32);
+	logger::debug("Returning to 0x%.8x", src);
+	*self.inst_ptr = src;
+}
+
+
+macro Cpu._push(&self, BitWidth $width, val, bool $is_bytes)
+{
+	*self.stack_ptr -= $width;
+	$if $is_bytes:
+		self.mem_set(*self.stack_ptr, $width, val);
+	$else
+		self.mem_get(*self.stack_ptr, $width).set($width, val);
+	$endif
+}
+
+macro Cpu._pop(&self, BitWidth $width)
+{
+	var ret = self.mem_get(*self.stack_ptr, $width).get($width);
+	*self.stack_ptr += $width;
+	return ret;
+}
 
 <*
 	@require $typeof(val).typeid == $width.type
@@ -469,8 +595,9 @@ macro Cpu.set_val(&self, BitWidth $width, Instruction inst, #arg, val, bool $zer
 				self.regs[self.mem_get(*self.inst_ptr + offset, 1).get(W8)].write($width, val);
 			case REG_PTR:
 			case IMM:
-			case IMM_PTR:
 				abort("%s", inst.#arg);
+			case IMM_PTR:
+				self.mem_get(self.mem_get(*self.inst_ptr + offset, common::PTR_SIZE).get(W32), $width).set($width, val);
 		}
 	$else
 		$error("$zero not implented yet");
@@ -578,6 +705,9 @@ macro Cpu.move_forward(&self, BitWidth $width, InstructionType $type, Instructio
 	$endswitch
 }
 
+<*
+	FIXME: Does not work if inst.has_offset == true
+*>
 macro uint arg_size(ArgType type, BitWidth $width)
 {
 	switch (type)

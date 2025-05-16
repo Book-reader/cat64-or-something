@@ -11,7 +11,7 @@ const RAM_SIZE = 0x04000000; //  64 MiB
 const ROM_SIZE = 0x00080000; // 512 KiB
 const ROM_START = 0xF0000000;
 
-const MEM_TOTAL = RAM_SIZE + ROM_SIZE;
+// const MEM_TOTAL = RAM_SIZE + ROM_SIZE;
 
 const DEFAULT_INST_PTR = ROM_START;
 const DEFAULT_STACK_PTR = 0;
@@ -25,14 +25,14 @@ const String[NUM_REGISTERS] REG_NAMES = {
 	"R24", "R25", "R26", "R27", "R28", "R29", "R30", "R31",
 	"RSP", "ESP", "RFP", "RIP"};
 const REG_SIZE = 1; // Char
-const PTR_SIZE = 5; // Int
+const PTR_SIZE = 4; // Int
 const OFF_SIZE = 2; // Short
 
 $assert(usz.sizeof >= 5 && "Must be on at least a 32 bit system");
 
 alias InstSize = ushort;
 
-bitstruct Instruction : ushort @littleendian
+bitstruct Instruction (Printable) : ushort @littleendian
 {
 	ArgType src : 0..1;
 	ArgType dst : 2..3;
@@ -46,6 +46,22 @@ bitstruct Instruction : ushort @littleendian
 	Condition cond : 9..11;
 	ArgType src : 12..13;
 	ArgType dst : 14..15;*/
+}
+
+fn usz? Instruction.to_format(&self, Formatter* formatter) @dynamic
+{
+	usz? n;
+	String name = self.type.get_name();
+	if (self.cond.ordinal >= Condition.values.len || self.src.ordinal >= ArgType.values.len || self.dst.ordinal >= ArgType.values.len || self.width.ordinal >= BitWidth.values.len || name == "INVALID")
+	{
+		n += formatter.printf("<INVALID>");
+	}
+	else
+	{
+		if (self.cond != ALWAYS) n += formatter.printf("%s ", self.cond);
+		n += formatter.printf("%s.%s {%s->%s:%s}", self.type.get_name(), self.width, self.src, self.dst, self.has_offset);
+	}
+	return n;
 }
 
 // typedef Condition = char;
@@ -297,6 +313,8 @@ fn void char[].set_W64(self, ulong val)
 // const IFZ = 
 
 module common::inst;
+import logger;
+
 const InstructionType NOP   = 0x00;
 const InstructionType ADD   = 0x01;
 const InstructionType MUL   = 0x02;
@@ -515,6 +533,7 @@ fn String InstructionType.get_name(self)
 		case FLP:
 			return "FLP";
 		default:
-			unreachable("unknown or unsupported InstructionType %s", self);
+			// logger::warn("unknown or unsupported InstructionType %s", self);
+			return "INVALID";
 	}
 }
