@@ -24,13 +24,12 @@ const String[NUM_REGISTERS] REG_NAMES = {
 	"R16", "R17", "R18", "R19", "R20", "R21", "R22", "R23",
 	"R24", "R25", "R26", "R27", "R28", "R29", "R30", "R31",
 	"RSP", "ESP", "RFP", "RIP"};
-const REG_SIZE = 1; // Char
+//const REG_SIZE = 1; // Char
+
 const PTR_SIZE = 4; // Int
-const OFF_SIZE = 2; // Short
+$assert usz.sizeof >= PTR_SIZE : "Must be on at least a 32 bit system";
 
-$assert(usz.sizeof >= 5 && "Must be on at least a 32 bit system");
-
-alias InstSize = ushort;
+// alias InstSize = ushort;
 
 bitstruct Instruction (Printable) : ushort @littleendian
 {
@@ -47,6 +46,9 @@ bitstruct Instruction (Printable) : ushort @littleendian
 	ArgType src : 12..13;
 	ArgType dst : 14..15;*/
 }
+
+const INST_SIZE = 2;
+$assert Instruction.sizeof == INST_SIZE;
 
 fn usz? Instruction.to_format(&self, Formatter* formatter) @dynamic
 {

@@ -9,6 +9,21 @@ import std::collections::list;
 
 alias alloc = allocator::mem;
 
+bitstruct Byte : ushort
+{
+	ushort val : 0..8;
+}
+
+bitstruct Word : uint
+{
+	uint val : 0..17;
+}
+
+bitstruct DWord : ulong
+{
+	ulong val : 0..35;
+}
+
 struct ReadResult
 {
 	uint diff;
@@ -289,9 +304,9 @@ fn int main(String[] args)
 	defer if (args.len > 1 && args[0] != "test") free(prog);
 
 
-	// cpu.mem_set(common::DEFAULT_INST_PTR, prog.len, prog);
-	*cpu.inst_ptr = 0;
-	cpu.mem_set(0, prog.len, prog);
+	cpu.mem_set(common::DEFAULT_INST_PTR, prog.len, prog);
+	// *cpu.inst_ptr = 0;
+	// cpu.mem_set(0, prog.len, prog);
 
 /*	if (args.len > 2)
 	{
@@ -358,7 +373,7 @@ fn int main(String[] args)
 				// $foreach $field : Instruction.membersof:
 				// 	logger::debug("inst.%s = %s", $field.nameof, inst.$eval($field.nameof));
 				// $endforeach
-				logger::debug("%.8x -> %s", *cpu.inst_ptr, inst);
+				logger::debug("0x%.8x -> %s", *cpu.inst_ptr, inst);
 
 				@each_width(inst.width; BitWidth $width)
 				{
@@ -377,7 +392,7 @@ fn int main(String[] args)
 		//		}
 		
 				// Point at the next byte
-				*cpu.inst_ptr += 2;
+				*cpu.inst_ptr += common::INST_SIZE;
 		
 				// Execute the current instruction
 				if (cpu.should_execute(inst))
@@ -402,6 +417,12 @@ fn int main(String[] args)
 			case inst::SUB:
 				cpu.inst_sub(inst);
 				nextcase inst::GET;
+			case inst::MUL:
+				cpu.inst_mul(inst);
+				nextcase inst::GET;
+			case inst::DIV:
+				cpu.inst_div(inst);
+				nextcase inst::GET;
 			case inst::MOV:
 				cpu.inst_mov(inst);
 				nextcase inst::GET;
@@ -410,6 +431,9 @@ fn int main(String[] args)
 				nextcase inst::GET;
 			case inst::JMP:
 				cpu.inst_jmp(inst);
+				nextcase inst::GET;
+			case inst::RJMP:
+				cpu.inst_rjmp(inst);
 				nextcase inst::GET;
 			case inst::MCL:
 				cpu.flags.mmu = false;
@@ -502,6 +526,24 @@ macro Cpu.inst_sub(&self, Instruction inst) => @each_width(inst.width; BitWidth 
 	self.move_forward($width, inst::SUB, inst);
 }
 
+macro Cpu.inst_mul(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
+{
+	var src = self.get_val($width, inst, src);
+	var dst = self.get_val($width, inst, dst);
+	logger::debug("multiplying %s and %s", dst, src);
+	self.set_val($width, inst, dst, @as($typefrom($width.type), dst * src));
+	self.move_forward($width, inst::MUL, inst);
+}
+
+macro Cpu.inst_div(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
+{
+	var src = self.get_val($width, inst, src);
+	var dst = self.get_val($width, inst, dst);
+	logger::debug("dividing %s by %s", dst, src);
+	self.set_val($width, inst, dst, @as($typefrom($width.type), dst / src));
+	self.move_forward($width, inst::DIV, inst);
+}
+
 macro Cpu.inst_mov(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
 {
 	var src = self.get_val($width, inst, src);
@@ -525,6 +567,14 @@ macro Cpu.inst_jmp(&self, Instruction inst) => @each_width(inst.width; BitWidth 
 	var src = self.get_val($width, inst, src);
 	logger::debug("Jmping to 0x%.8x", src);
 	*self.inst_ptr = src;
+	// self.move_forward($width, inst::JMP, inst);
+}
+
+macro Cpu.inst_rjmp(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
+{
+	var src = self.get_val($width, inst, src);
+	logger::debug("Jmping by %s", (int)src);
+	*self.inst_ptr += (int)src - common::INST_SIZE;
 	// self.move_forward($width, inst::JMP, inst);
 }
 
