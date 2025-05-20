@@ -432,6 +432,67 @@ macro InstructionType.arg_count($self) @const
 	$endswitch
 }
 
+fn usz InstructionType.arg_count_rt(self) @deprecated("pls don't use it has runtime cost :(")
+{
+	switch (self)
+	{
+		case NOP:
+		case ISE:
+		case MSE:
+		case HALT:
+		case ICL:
+		case MCL:
+		case BRK:
+		case RET:
+		case RETI:
+			return 0;
+		case ADD:
+		case MUL:
+		case AND:
+		case SLA:
+		case SRA:
+		case BSE:
+		case CMP:
+		case IN:
+		case OR:
+		case IMUL:
+		case SRL:
+		case BCL:
+		case MOV:
+		case OUT:
+		case SUB:
+		case DIV:
+		case XOR:
+		case ROL:
+		case ROR:
+		case BTS:
+		case MOVZ:
+		case REM:
+		case IDIV:
+		case IREM:
+		case ICMP:
+		case RTA:
+			return 2;
+		case JMP:
+		case RJMP:
+		case PUSH:
+		case INC:
+		case CALL:
+		case RCALL:
+		case POP:
+		case LOOP:
+		case RLOOP:
+		case INT:
+		case TLB:
+		case DEC:
+		case NOT:
+		case FLP:
+			return 1;
+		default:
+			abort("Unknown instruction: 0x%.4x", self);
+	}
+}
+
 fn String InstructionType.get_name(self)
 {
 	switch (self)

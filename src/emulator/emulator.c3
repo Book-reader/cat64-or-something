@@ -9,21 +9,6 @@ import std::collections::list;
 
 alias alloc = allocator::mem;
 
-bitstruct Byte : ushort
-{
-	ushort val : 0..8;
-}
-
-bitstruct Word : uint
-{
-	uint val : 0..17;
-}
-
-bitstruct DWord : ulong
-{
-	ulong val : 0..35;
-}
-
 struct ReadResult
 {
 	uint diff;
@@ -188,14 +173,12 @@ fn ushort Register.read_W16(self) => @as(ushort, self & 0x0000ffff);
 
 fn uint Register.read_W32(self) => self;
 
-bitstruct CpuFlags : Register
+bitstruct CpuFlags : char
 {
 	bool zero : 0;
 	bool carry : 1;
-	bool exception_sp : 2;
 	bool interrupt : 3;
-	bool mmu : 4;
-	bool page_directort : 5;
+	bool exception_sp : 2;
 }
 
 struct Cpu
@@ -205,7 +188,10 @@ struct Cpu
 	Register* exception_ptr; // A pointer to regs[33];
 	Register* frame_ptr; // A pointer to regs[34];
 	Register* inst_ptr; // a pointer to regs[35];
+	Register inst_ptr_next;
 	CpuFlags flags;
+	bool mmu_enabled;
+	bool page_directory;
 	Register[common::NUM_REGISTERS] regs;
 }
 
@@ -214,7 +200,7 @@ struct Cpu
 *>
 fn void Cpu.mem_set(&self, uint start, uint len, char[] buf) @inline
 {
-	//if (!self.flags.mmu)
+	//if (!self.mmu_enabled)
 	//{
 	//	mem.ram[start:len] = buf[:len];
 	//}
@@ -231,7 +217,7 @@ fn void Cpu.mem_set(&self, uint start, uint len, char[] buf) @inline
 fn char[] Cpu.mem_get(&self, uint start, uint len) @inline
 {
 	// TODO: make this unlikely using whatever stdlib macro
-	//if (!self.flags.mmu)
+	//if (!self.mmu_enabled)
 	//{
 	//	return mem.ram[start:len];
 	//}
@@ -251,7 +237,8 @@ fn void Cpu.init(&self)
 	self.inst_ptr = &self.regs[35];
 	*self.inst_ptr = common::DEFAULT_INST_PTR;
 	*self.stack_ptr = common::DEFAULT_STACK_PTR;
-	self.flags.mmu = true;
+	self.inst_ptr_next = *self.inst_ptr;
+	self.mmu_enabled = true;
 }
 
 Memory mem;
@@ -347,6 +334,7 @@ fn int main(String[] args)
 				$if $feature(DELAY):
 					thread::sleep(1000000);
 				$endif
+				*cpu.inst_ptr = cpu.inst_ptr_next;
 				// self.move_forward(inst, width);
 
 				nextcase;
@@ -377,32 +365,15 @@ fn int main(String[] args)
 
 				@each_width(inst.width; BitWidth $width)
 				{
-					uint addr = *cpu.inst_ptr + 2 + arg_size(inst.src, $width) + arg_size(inst.dst, $width) + (inst.has_offset ? 2 : 0);
+					uint addr = *cpu.inst_ptr + 2 + (inst.type.arg_count_rt() >= 1 ? arg_size(inst.src, $width) : 0) + (inst.type.arg_count_rt() >= 2 ? arg_size(inst.dst, $width) : 0) + (inst.has_offset ? 2 : 0);
 					logger::debug("Next instruction at %.8x : %s", addr, (Instruction)cpu.mem_get(addr, 2).get(W16));
 				};
-		//		logger::debug("%s: %.4x -> %s.%s %s, %s", *cpu.inst_ptr, @as(InstSize, inst), inst.type, inst.width, inst.type == JIF ? inst.jif_cond.nameof : inst.dst_type.nameof, inst.src_type);
-		
-		
-				// Big brain error checking
-		//		if (!inst.real)
-		//		{
-		//			logger::error("Invalid instruction: %.4x", @as(InstSize, inst));
-		//			running = false;
-		//			continue;
-		//		}
-		
+
 				// Point at the next byte
-				*cpu.inst_ptr += common::INST_SIZE;
+				cpu.inst_ptr_next = *cpu.inst_ptr + common::INST_SIZE;
 		
 				// Execute the current instruction
-				if (cpu.should_execute(inst))
-				{
-					nextcase inst.type;
-				}
-				else
-				{
-					nextcase inst::GET;
-				}
+				nextcase inst.type;
 			case inst::HALT:
 			case inst::BREAK:
 				foreach (i, reg : cpu.regs)
@@ -436,10 +407,10 @@ fn int main(String[] args)
 				cpu.inst_rjmp(inst);
 				nextcase inst::GET;
 			case inst::MCL:
-				cpu.flags.mmu = false;
+				cpu.mmu_enabled = false;
 				nextcase inst::GET;
 			case inst::MSE:
-				cpu.flags.mmu = true;
+				cpu.mmu_enabled = true;
 				nextcase inst::GET;
 			case inst::OUT:
 				cpu.inst_out(inst);
@@ -452,6 +423,7 @@ fn int main(String[] args)
 				nextcase inst::GET;
 			case inst::ISE:
 				cpu.flags.interrupt = true;
+				logger::warn("Interrupts don't work yet :3");
 				nextcase inst::GET;
 			case inst::ICL:
 				cpu.flags.interrupt = false;
@@ -486,6 +458,111 @@ fn int main(String[] args)
 	return 0;
 }
 
+fn void Cpu.inst_add(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width)
+{
+	$typefrom($width.type) src = self.get_val($width, inst, src);
+	$typefrom($width.type) dst = self.get_val($width, inst, dst);
+	logger::debug("Adding %s and %s", dst, src);
+	self.set_val($width, inst, dst, @as($typefrom($width.type), dst + src));
+	// self.move_forward($width, inst::ADD, inst);
+}
+
+fn void Cpu.inst_sub(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width)
+{
+	$typefrom($width.type) src = self.get_val($width, inst, src);
+	$typefrom($width.type) dst = self.get_val($width, inst, dst);
+	logger::debug("Subtracting %s and %s", dst, src);
+	self.set_val($width, inst, dst, @as($typefrom($width.type), dst - src));
+	// self.move_forward($width, inst::SUB, inst);
+}
+
+fn void Cpu.inst_mul(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width)
+{
+	$typefrom($width.type) src = self.get_val($width, inst, src);
+	$typefrom($width.type) dst = self.get_val($width, inst, dst);
+	logger::debug("multiplying %s and %s", dst, src);
+	self.set_val($width, inst, dst, @as($typefrom($width.type), dst * src));
+	// self.move_forward($width, inst::MUL, inst);
+}
+
+fn void Cpu.inst_div(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width)
+{
+	$typefrom($width.type) src = self.get_val($width, inst, src);
+	$typefrom($width.type) dst = self.get_val($width, inst, dst);
+	logger::debug("dividing %s by %s", dst, src);
+	self.set_val($width, inst, dst, @as($typefrom($width.type), dst / src));
+	self.move_forward($width, inst::DIV, inst);
+}
+
+fn void Cpu.inst_mov(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width)
+{
+	$typefrom($width.type) src = self.get_val($width, inst, src);
+	logger::debug("Moving %s", src);
+	self.set_val($width, inst, dst, src);
+	// self.move_forward($width, inst::MOV, inst);
+}
+
+fn void Cpu.inst_cmp(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width)
+{
+	$typefrom($width.type) src = self.get_val($width, inst, src);
+	$typefrom($width.type) dst = self.get_val($width, inst, dst);
+	logger::debug("Comparing %s and %s", src, dst);
+	self.flags.zero = src == dst;
+	self.flags.carry = src > dst;
+	// self.move_forward($width, inst::MOV, inst);
+}
+
+fn void Cpu.inst_jmp(&self, Instruction inst) @inline => self.@setup_w(inst, false; BitWidth $width)
+{
+	$typefrom($width.type) src = self.get_val($width, inst, src);
+	logger::debug("Jmping to 0x%.8x", src);
+	self.inst_ptr_next = src;
+	// self.move_forward($width, inst::JMP, inst);
+}
+
+fn void Cpu.inst_rjmp(&self, Instruction inst) @inline => self.@setup_w(inst, false; BitWidth $width)
+{
+	$typefrom($width.type) src = self.get_val($width, inst, src);
+	logger::debug("Jmping by %s", (int)src);
+	self.inst_ptr_next += (int)src - common::INST_SIZE;
+	// self.move_forward($width, inst::JMP, inst);
+}
+
+extern fn CInt putchar(CInt c);
+
+fn void Cpu.inst_out(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width)
+{
+	$typefrom($width.type) src = self.get_val($width, inst, src);
+	$typefrom($width.type) dst = self.get_val($width, inst, dst);
+	if (dst != 0)
+	{
+		logger::warn("Out to not stdout is not supported yet: 0x%.8x", dst);
+	}
+	else
+	{
+		putchar((CInt)src) @inline;
+	}
+	// TODO: have a macro that wraps this & does something like: self.move_forward($width, $eval("inst::" +++ @to_upper($$FUNC[5..])), inst;
+	// self.move_forward($width, inst::OUT, inst);
+}
+
+fn void Cpu.inst_call(&self, Instruction inst) @inline => self.@setup_w(inst, false; BitWidth $width)
+{
+	$typefrom($width.type) src = self.get_val($width, inst, src);
+	self.move_forward($width, inst::CALL, inst);
+	self._push(W32, self.inst_ptr_next, false);
+	logger::debug("Jmping to 0x%.8x", src);
+	self.inst_ptr_next = src;
+}
+
+fn void Cpu.inst_ret(&self, Instruction inst) @inline => self.@setup(inst, W32, false)
+{
+	$typefrom(BitWidth.W32.type) src = self._pop(W32);
+	logger::debug("Returning to 0x%.8x", src);
+	self.inst_ptr_next = src;
+}
+
+
 fn bool Cpu.should_execute(&self, Instruction inst) @inline
 {
 	switch (inst.cond)
@@ -508,111 +585,6 @@ fn bool Cpu.should_execute(&self, Instruction inst) @inline
 	}
 }
 
-macro Cpu.inst_add(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
-{
-	var src = self.get_val($width, inst, src);
-	var dst = self.get_val($width, inst, dst);
-	logger::debug("Adding %s and %s", dst, src);
-	self.set_val($width, inst, dst, @as($typefrom($width.type), dst + src));
-	self.move_forward($width, inst::ADD, inst);
-}
-
-macro Cpu.inst_sub(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
-{
-	var src = self.get_val($width, inst, src);
-	var dst = self.get_val($width, inst, dst);
-	logger::debug("Subtracting %s and %s", dst, src);
-	self.set_val($width, inst, dst, @as($typefrom($width.type), dst - src));
-	self.move_forward($width, inst::SUB, inst);
-}
-
-macro Cpu.inst_mul(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
-{
-	var src = self.get_val($width, inst, src);
-	var dst = self.get_val($width, inst, dst);
-	logger::debug("multiplying %s and %s", dst, src);
-	self.set_val($width, inst, dst, @as($typefrom($width.type), dst * src));
-	self.move_forward($width, inst::MUL, inst);
-}
-
-macro Cpu.inst_div(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
-{
-	var src = self.get_val($width, inst, src);
-	var dst = self.get_val($width, inst, dst);
-	logger::debug("dividing %s by %s", dst, src);
-	self.set_val($width, inst, dst, @as($typefrom($width.type), dst / src));
-	self.move_forward($width, inst::DIV, inst);
-}
-
-macro Cpu.inst_mov(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
-{
-	var src = self.get_val($width, inst, src);
-	logger::debug("Moving %s", src);
-	self.set_val($width, inst, dst, src);
-	self.move_forward($width, inst::MOV, inst);
-}
-
-macro Cpu.inst_cmp(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
-{
-	var src = self.get_val($width, inst, src);
-	var dst = self.get_val($width, inst, dst);
-	logger::debug("Comparing %s and %s", src, dst);
-	self.flags.zero = src == dst;
-	self.flags.carry = src > dst;
-	self.move_forward($width, inst::MOV, inst);
-}
-
-macro Cpu.inst_jmp(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
-{
-	var src = self.get_val($width, inst, src);
-	logger::debug("Jmping to 0x%.8x", src);
-	*self.inst_ptr = src;
-	// self.move_forward($width, inst::JMP, inst);
-}
-
-macro Cpu.inst_rjmp(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
-{
-	var src = self.get_val($width, inst, src);
-	logger::debug("Jmping by %s", (int)src);
-	*self.inst_ptr += (int)src - common::INST_SIZE;
-	// self.move_forward($width, inst::JMP, inst);
-}
-
-extern fn CInt putchar(CInt c);
-
-macro Cpu.inst_out(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
-{
-	var src = self.get_val($width, inst, src);
-	var dst = self.get_val($width, inst, dst);
-	if (dst != 0)
-	{
-		logger::warn("Out to not stdout is not supported yet: 0x%.8x", dst);
-	}
-	else
-	{
-		putchar((CInt)src) @inline;
-	}
-	// TODO: have a macro that wraps this & does something like: self.move_forward($width, $eval("inst::" +++ @to_upper($$FUNC[5..])), inst;
-	self.move_forward($width, inst::OUT, inst);
-}
-
-macro Cpu.inst_call(&self, Instruction inst) => @each_width(inst.width; BitWidth $width)
-{
-	var src = self.get_val($width, inst, src);
-	self.move_forward($width, inst::CALL, inst);
-	self._push(W32, *self.inst_ptr, false);
-	logger::debug("Jmping to 0x%.8x", src);
-	*self.inst_ptr = src;
-}
-
-macro Cpu.inst_ret(&self, Instruction inst)
-{
-	var src = self._pop(W32);
-	logger::debug("Returning to 0x%.8x", src);
-	*self.inst_ptr = src;
-}
-
-
 macro Cpu._push(&self, BitWidth $width, val, bool $is_bytes)
 {
 	*self.stack_ptr -= $width;
@@ -630,6 +602,28 @@ macro Cpu._pop(&self, BitWidth $width)
 	return ret;
 }
 
+macro Cpu.@setup_w(&self, Instruction inst, bool $move = true; @body(BitWidth $width))
+{
+	@each_width(inst.width; BitWidth $width)
+	{
+		self.@setup(inst, $width, $move)
+		{
+			@body($width);
+		};
+	};
+}
+
+macro Cpu.@setup(&self, Instruction inst, BitWidth $width, bool $move = true; @body())
+{
+	if (self.should_execute(inst))
+	{
+		@body();
+	}
+	$if $move:
+		self.move_forward($width, $eval("inst::" +++ @str_upper($$FUNC[9..])), inst);
+	$endif
+}
+
 <*
 	@require $typeof(val).typeid == $width.type
 	@require $stringify(#arg) == "src" || $stringify(#arg) == "dst"
@@ -637,17 +631,17 @@ macro Cpu._pop(&self, BitWidth $width)
 macro Cpu.set_val(&self, BitWidth $width, Instruction inst, #arg, val, bool $zero = false) @safemacro
 {
 	uint offset = @arg_offset($width, inst, #arg);
-	// logger::debug("Current idx is %s, calculated offset is %s", *self.inst_ptr, offset);
+	// logger::debug("Current idx is %s, calculated offset is %s", self.inst_ptr_next, offset);
 	$if !$zero:
 		switch (inst.#arg)
 		{
 			case REG:
-				self.regs[self.mem_get(*self.inst_ptr + offset, 1).get(W8)].write($width, val);
+				self.regs[self.mem_get(self.inst_ptr_next + offset, 1).get(W8)].write($width, val);
 			case REG_PTR:
 			case IMM:
 				abort("%s", inst.#arg);
 			case IMM_PTR:
-				self.mem_get(self.mem_get(*self.inst_ptr + offset, common::PTR_SIZE).get(W32), $width).set($width, val);
+				self.mem_get(self.mem_get(self.inst_ptr_next + offset, common::PTR_SIZE).get(W32), $width).set($width, val);
 		}
 	$else
 		$error("$zero not implented yet");
@@ -661,17 +655,17 @@ macro Cpu.set_val(&self, BitWidth $width, Instruction inst, #arg, val, bool $zer
 macro Cpu.get_val(&self, BitWidth $width, Instruction inst, #arg) @safemacro
 {
 	uint offset = @arg_offset($width, inst, #arg);
-	// logger::debug("Current idx is %s, calculated offset is %s", *self.inst_ptr, offset);
+	// logger::debug("Current idx is %s, calculated offset is %s", self.inst_ptr_next, offset);
 	switch (inst.#arg)
 	{
 		case REG:
-			return self.regs[self.mem_get(*self.inst_ptr + offset, 1).get(W8)].read($width);
+			return self.regs[self.mem_get(self.inst_ptr_next + offset, 1).get(W8)].read($width);
 		case REG_PTR:
-			return self.mem_get(self.regs[self.mem_get(*self.inst_ptr + offset, 1).get(W8)] + self.mem_get(*self.inst_ptr + 1, 1).get(W8), $width).get($width);
+			return self.mem_get(self.regs[self.mem_get(self.inst_ptr_next + offset, 1).get(W8)] + self.mem_get(self.inst_ptr_next + 1, 1).get(W8), $width).get($width);
 		case IMM:
-			return self.mem_get(*self.inst_ptr + offset, $width).get($width);
+			return self.mem_get(self.inst_ptr_next + offset, $width).get($width);
 		case IMM_PTR:
-			return self.mem_get(self.mem_get(*self.inst_ptr + offset, common::PTR_SIZE).get(W32), $width).get($width);
+			return self.mem_get(self.mem_get(self.inst_ptr_next + offset, common::PTR_SIZE).get(W32), $width).get($width);
 	}
 }
 
@@ -743,14 +737,14 @@ macro Cpu.move_forward(&self, BitWidth $width, InstructionType $type, Instructio
 	// *self.inst_ptr += $width.size * 2;
 	if (inst.has_offset)
 	{
-		*self.inst_ptr += 2;
+		self.inst_ptr_next += 2;
 	}
 	$switch $type.arg_count():
 		$case 1:
-			*self.inst_ptr += arg_size(inst.src, $width);
+			self.inst_ptr_next += arg_size(inst.src, $width);
 		$case 2:
-			*self.inst_ptr += arg_size(inst.src, $width);
-			*self.inst_ptr += arg_size(inst.dst, $width);
+			self.inst_ptr_next += arg_size(inst.src, $width);
+			self.inst_ptr_next += arg_size(inst.dst, $width);
 		$case 0:
 	$endswitch
 }
