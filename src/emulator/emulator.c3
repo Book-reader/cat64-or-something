@@ -419,7 +419,7 @@ fn int main(String[] args)
 				nextcase inst::GET;
 			case inst::ISE:
 				cpu.flags.interrupt = true;
-				logger::panic("Interrupts don't work yet :3");
+				logger::error("Interrupts don't work yet :3");
 				nextcase inst::GET;
 			case inst::ICL:
 				cpu.flags.interrupt = false;
@@ -429,6 +429,9 @@ fn int main(String[] args)
 				nextcase inst::GET;
 			case inst::PUSH:
 				cpu.inst_push(inst);
+				nextcase inst::GET;
+			case inst::POP:
+				cpu.inst_pop(inst);
 				nextcase inst::GET;
 			default:
 				logger::error("Instruction %s is not implemented yet", inst.type.get_name());
@@ -591,6 +594,13 @@ fn void Cpu.inst_push(&self, Instruction inst) @inline => self.@setup_w(inst; Bi
 	self._push($width, src, false);
 }
 
+fn void Cpu.inst_pop(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width)
+{
+	$typefrom($width.type) src = self.get_val($width, inst, src);
+	logger::debug("Popping into %s", src);
+	self.set_val($width, inst, dst, self._pop($width));
+}
+
 fn bool Cpu.should_execute(&self, Instruction inst) @inline
 {
 	switch (inst.cond)
@@ -609,7 +619,6 @@ fn bool Cpu.should_execute(&self, Instruction inst) @inline
 			return !self.flags.zero && !self.flags.carry;
 		case IFLTEQ:
 			return self.flags.zero || self.flags.carry;
-			
 	}
 }
 
@@ -646,6 +655,13 @@ macro Cpu.@setup(&self, Instruction inst, BitWidth $width, bool $move = true; @b
 	if (self.should_execute(inst))
 	{
 		@body();
+	}
+	else
+	{
+		$if !$move:
+			self.move_forward($width, $eval("inst::" +++ @str_upper($$FUNC[9..])), inst);
+		$endif
+		logger::debug("Skipping instruction %s", inst);
 	}
 	$if $move:
 		self.move_forward($width, $eval("inst::" +++ @str_upper($$FUNC[9..])), inst);
