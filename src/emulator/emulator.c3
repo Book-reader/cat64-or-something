@@ -419,7 +419,7 @@ fn int main(String[] args)
 				nextcase inst::GET;
 			case inst::ISE:
 				cpu.flags.interrupt = true;
-				logger::warn("Interrupts don't work yet :3");
+				logger::panic("Interrupts don't work yet :3");
 				nextcase inst::GET;
 			case inst::ICL:
 				cpu.flags.interrupt = false;
@@ -570,13 +570,17 @@ fn void Cpu.inst_ret(&self, Instruction inst) @inline => self.@setup(inst, W32, 
 	self.inst_ptr_next = src;
 }
 
-fn void Cpu.inst_loop(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width)
+fn void Cpu.inst_loop(&self, Instruction inst) @inline => self.@setup_w(inst, false; BitWidth $width)
 {
 	if ((*self.loop_ptr -= 1) != 0)
 	{
 		$typefrom($width.type) src = self.get_val($width, inst, src);
 		logger::debug("Looping to 0x%.8x", src);
 		self.inst_ptr_next = src;
+	}
+	else
+	{
+		self.move_forward($width, inst::LOOP, inst);
 	}
 }
 
