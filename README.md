@@ -1,30 +1,25 @@
-# Cat64 or something
+# Fox32 emulator but not done yet
 
-## Inspired by [Fox32](https://github.com/fox32-arch)
+## emulator for [Fox32](https://github.com/fox32-arch) except it doesn't work :O
 
 > [!NOTE]
 > Program doesn't compile?
 > try this:
 > ```console
-> $ git clone https://github.com/c3lang/c3c
-> $ cd c3c
-> $ mkdir build
-> $ cd build
-> $ cmake ..
-> $ cmake --build .
+> $ nix develop --impure
 > ```
 
 usage:
 ```
 c3c build -O5 emulator
-./build/emulator <input file> <string at address 0xff>
+./build/emulator <input file> <cpu cycles before shutdown (optional)>
 ```
 ```
-c3c build -O5 assembler
+c3c build -O5 assembler (doesn't compile and probably wont ever again)
 ./build/assembler <input file> <output file>
 ```
 
 can also be ran as:
 ```
-c3c run <emulator/assembler> -- <args>
+c3c run emulator -- <args>
 ``
