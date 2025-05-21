@@ -570,7 +570,7 @@ fn void Cpu.inst_ret(&self, Instruction inst) @inline => self.@setup(inst, W32, 
 	self.inst_ptr_next = src;
 }
 
-fn void Cpu.inst_loop(&self, Instruction inst) @inline => self.@setup(inst, W32 ,false)
+fn void Cpu.inst_loop(&self, Instruction inst) @inline => self.@setup(inst, W32, false)
 {
 	if ((*self.loop_ptr -= 1) != 0)
 	{
@@ -666,8 +666,9 @@ macro Cpu.set_val(&self, BitWidth $width, Instruction inst, #arg, val, bool $zer
 			case REG:
 				self.regs[self.mem_get(self.inst_ptr_next + offset, 1).get(W8)].write($width, val);
 			case REG_PTR:
+				self.mem_get(self.regs[self.mem_get(self.inst_ptr_next + offset, 1).get(W8)], $width).set($width, val);
 			case IMM:
-				abort("%s", inst.#arg);
+				abort("mov into immediate value not implemented");
 			case IMM_PTR:
 				self.mem_get(self.mem_get(self.inst_ptr_next + offset, common::PTR_SIZE).get(W32), $width).set($width, val);
 		}
@@ -687,6 +688,7 @@ macro Cpu.get_val(&self, BitWidth $width, Instruction inst, #arg) @safemacro
 	switch (inst.#arg)
 	{
 		case REG:
+			logger::debug("Reading from register %s", common::REG_NAMES[self.mem_get(self.inst_ptr_next + offset, 1).get(W8)]);
 			return self.regs[self.mem_get(self.inst_ptr_next + offset, 1).get(W8)].read($width);
 		case REG_PTR:
 			return self.mem_get(self.regs[self.mem_get(self.inst_ptr_next + offset, 1).get(W8)] + self.mem_get(self.inst_ptr_next + 1, 1).get(W8), $width).get($width);
