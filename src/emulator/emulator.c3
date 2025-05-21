@@ -520,9 +520,9 @@ fn void Cpu.inst_cmp(&self, Instruction inst) @inline => self.@setup_w(inst; Bit
 	// self.move_forward($width, inst::MOV, inst);
 }
 
-fn void Cpu.inst_jmp(&self, Instruction inst) @inline => self.@setup_w(inst, false; BitWidth $width)
+fn void Cpu.inst_jmp(&self, Instruction inst) @inline => self.@setup(inst, W32, false)
 {
-	$typefrom($width.type) src = self.get_val($width, inst, src);
+	$typefrom(BitWidth.W32.type) src = self.get_val(W32, inst, src);
 	logger::debug("Jmping to 0x%.8x", src);
 	self.inst_ptr_next = src;
 	// self.move_forward($width, inst::JMP, inst);
@@ -554,10 +554,10 @@ fn void Cpu.inst_out(&self, Instruction inst) @inline => self.@setup_w(inst; Bit
 	// self.move_forward($width, inst::OUT, inst);
 }
 
-fn void Cpu.inst_call(&self, Instruction inst) @inline => self.@setup_w(inst, false; BitWidth $width)
+fn void Cpu.inst_call(&self, Instruction inst) @inline => self.@setup(inst, W32, false)
 {
-	$typefrom($width.type) src = self.get_val($width, inst, src);
-	self.move_forward($width, inst::CALL, inst);
+	$typefrom(BitWidth.W32.type) src = self.get_val(W32, inst, src);
+	self.move_forward(W32, inst::CALL, inst);
 	self._push(W32, self.inst_ptr_next, false);
 	logger::debug("Calling 0x%.8x", src);
 	self.inst_ptr_next = src;
@@ -570,17 +570,17 @@ fn void Cpu.inst_ret(&self, Instruction inst) @inline => self.@setup(inst, W32, 
 	self.inst_ptr_next = src;
 }
 
-fn void Cpu.inst_loop(&self, Instruction inst) @inline => self.@setup_w(inst, false; BitWidth $width)
+fn void Cpu.inst_loop(&self, Instruction inst) @inline => self.@setup(inst, W32 ,false)
 {
 	if ((*self.loop_ptr -= 1) != 0)
 	{
-		$typefrom($width.type) src = self.get_val($width, inst, src);
+		$typefrom(BitWidth.W32.type) src = self.get_val(W32, inst, src);
 		logger::debug("Looping to 0x%.8x", src);
 		self.inst_ptr_next = src;
 	}
 	else
 	{
-		self.move_forward($width, inst::LOOP, inst);
+		self.move_forward(W32, inst::LOOP, inst);
 	}
 }
 
