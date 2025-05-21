@@ -5,7 +5,8 @@ import std::math::random;
 macro debug(String msg, ...)
 {
   $if $feature(DEBUG):
-    io::eprintf("[DEBUG] (%s:%s %s) ", $$FILE, $$LINE, $$FUNC);
+    // io::eprintf("[DEBUG] (%s:%s %s) ", $$FILE, $$LINE, $$FUNC);
+	io::eprintf("[DEBUG] ");
     io::eprintfn(msg, $vasplat);
   $endif
 }

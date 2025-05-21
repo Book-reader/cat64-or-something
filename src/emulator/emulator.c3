@@ -184,6 +184,7 @@ bitstruct CpuFlags : char
 struct Cpu
 {
 	// The address of the current instruction in memory
+	Register* loop_ptr; // A pointer to regs[31];
 	Register* stack_ptr; // A pointer to regs[32];
 	Register* exception_ptr; // A pointer to regs[33];
 	Register* frame_ptr; // A pointer to regs[34];
@@ -231,6 +232,7 @@ fn char[] Cpu.mem_get(&self, uint start, uint len) @inline
 fn void Cpu.init(&self)
 {
 	self.regs = {};
+	self.loop_ptr = &self.regs[31];
 	self.stack_ptr = &self.regs[32];
 	self.exception_ptr = &self.regs[33];
 	self.frame_ptr = &self.regs[34];
@@ -253,15 +255,6 @@ fn int main(String[] args)
 	cpu.init();
 	mem.init();
 	defer mem.free();
-	InstructionType test = inst::JMP;
-	BitWidth test2 = W32;
-//	Instruction test = {.real = true, .type = MOV, .width = W64, .src_type = REGPTR, .dst_type = REG};
-//{.real = true, .type = JIF, .jif_cond = NE, .width = W8, .dst_type = NUM};//{.real = true, .type = JIF, .width = W8, .src_type = NUM, .dst_type = REG};
-//{.real = true, .type = JIF, .jif_cond = NE, .offset_kind = SRC, .width = W8, .dst_type = NUM};//{.real = true, .type = MOV, .width = W64, .src_type = NUM, .dst_type = REG};
-	//{.real = true, .type = JIF, .jif_cond = NE, .offset_kind = SRC, .width = W8, .src_type = PTR,.dst_type = PTR}; // {.type = CMP, .width = W8, .src_type = REGPTR, .dst_type = NUM, .offset_kind = NONE, .real = true };
-//	char[2] a;
-//	set_W16(&a, (InstSize)test);
-	logger::debug("test: %.2x %.2x 00b6: \u00b6", test, test2);
 
 	char[] prog;
 
@@ -361,7 +354,7 @@ fn int main(String[] args)
 				// $foreach $field : Instruction.membersof:
 				// 	logger::debug("inst.%s = %s", $field.nameof, inst.$eval($field.nameof));
 				// $endforeach
-				logger::debug("0x%.8x -> %s", *cpu.inst_ptr, inst);
+				logger::debug("%s 0x%.8x -> %s", iters, *cpu.inst_ptr, inst);
 
 				@each_width(inst.width; BitWidth $width)
 				{
@@ -382,6 +375,9 @@ fn int main(String[] args)
 				}
 				return 0;
 
+			case inst::INC:
+				cpu.inst_inc(inst);
+				nextcase inst::GET;
 			case inst::ADD:
 				cpu.inst_add(inst);
 				nextcase inst::GET;
@@ -428,6 +424,12 @@ fn int main(String[] args)
 			case inst::ICL:
 				cpu.flags.interrupt = false;
 				nextcase inst::GET;
+			case inst::LOOP:
+				cpu.inst_loop(inst);
+				nextcase inst::GET;
+			case inst::PUSH:
+				cpu.inst_push(inst);
+				nextcase inst::GET;
 			default:
 				logger::error("Instruction %s is not implemented yet", inst.type.get_name());
 				nextcase inst::BREAK;
@@ -456,6 +458,13 @@ fn int main(String[] args)
 	$endif
 
 	return 0;
+}
+
+fn void Cpu.inst_inc(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width)
+{
+	$typefrom($width.type) src = self.get_val($width, inst, src);
+	logger::debug("Incrementing %s", src);
+	self.set_val($width, inst, src, @as($typefrom($width.type), src + 1));
 }
 
 fn void Cpu.inst_add(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width)
@@ -491,7 +500,7 @@ fn void Cpu.inst_div(&self, Instruction inst) @inline => self.@setup_w(inst; Bit
 	$typefrom($width.type) dst = self.get_val($width, inst, dst);
 	logger::debug("dividing %s by %s", dst, src);
 	self.set_val($width, inst, dst, @as($typefrom($width.type), dst / src));
-	self.move_forward($width, inst::DIV, inst);
+	// self.move_forward($width, inst::DIV, inst);
 }
 
 fn void Cpu.inst_mov(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width)
@@ -499,7 +508,6 @@ fn void Cpu.inst_mov(&self, Instruction inst) @inline => self.@setup_w(inst; Bit
 	$typefrom($width.type) src = self.get_val($width, inst, src);
 	logger::debug("Moving %s", src);
 	self.set_val($width, inst, dst, src);
-	// self.move_forward($width, inst::MOV, inst);
 }
 
 fn void Cpu.inst_cmp(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width)
@@ -551,7 +559,7 @@ fn void Cpu.inst_call(&self, Instruction inst) @inline => self.@setup_w(inst, fa
 	$typefrom($width.type) src = self.get_val($width, inst, src);
 	self.move_forward($width, inst::CALL, inst);
 	self._push(W32, self.inst_ptr_next, false);
-	logger::debug("Jmping to 0x%.8x", src);
+	logger::debug("Calling 0x%.8x", src);
 	self.inst_ptr_next = src;
 }
 
@@ -562,6 +570,22 @@ fn void Cpu.inst_ret(&self, Instruction inst) @inline => self.@setup(inst, W32, 
 	self.inst_ptr_next = src;
 }
 
+fn void Cpu.inst_loop(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width)
+{
+	if ((*self.loop_ptr -= 1) != 0)
+	{
+		$typefrom($width.type) src = self.get_val($width, inst, src);
+		logger::debug("Looping to 0x%.8x", src);
+		self.inst_ptr_next = src;
+	}
+}
+
+fn void Cpu.inst_push(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width)
+{
+	$typefrom($width.type) src = self.get_val($width, inst, src);
+	logger::debug("Pushing %s %.8x", src, src);
+	self._push($width, src, false);
+}
 
 fn bool Cpu.should_execute(&self, Instruction inst) @inline
 {
@@ -667,16 +691,6 @@ macro Cpu.get_val(&self, BitWidth $width, Instruction inst, #arg) @safemacro
 		case IMM_PTR:
 			return self.mem_get(self.mem_get(self.inst_ptr_next + offset, common::PTR_SIZE).get(W32), $width).get($width);
 	}
-}
-
-<*
-	@ensure io::printfn("@add returned: %s", return)!! == 0
-*>
-macro @add(typeid $type, #a, #b) 
-{
-	var a = @as($typefrom($type), (#a) + (#b));
-	logger::debug("@add result: %s", a);
-	return a;
 }
 
 macro invalid_instruction(...)
