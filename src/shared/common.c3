@@ -432,6 +432,82 @@ macro InstructionType.arg_count($self) @const
 	$endswitch
 }
 
+// bit ops like bsl always have W8 sources because you don't need to shift the max of 32 bits by more than the 255 of W8 so allowing W16/32 would be pointless&wasteful
+macro bool InstructionType.is_bit_op($self) @const
+{
+	$switch $self:
+		$case SLA:
+		$case SRA:
+		$case SRL:
+		$case ROR:
+		$case ROL:
+		$case BCL:
+		$case BSE:
+		$case BTS:
+			return true;
+		$default:
+			return false;
+	$endswitch
+}
+
+macro bool is_valid_instruction(InstructionType $val)
+{
+	$switch $val:
+		$case NOP:
+		$case ISE:
+		$case MSE:
+		$case HALT:
+		$case ICL:
+		$case MCL:
+		$case BRK:
+		$case RET:
+		$case RETI:
+		$case ADD:
+		$case MUL:
+		$case AND:
+		$case SLA:
+		$case SRA:
+		$case BSE:
+		$case CMP:
+		$case IN:
+		$case OR:
+		$case IMUL:
+		$case SRL:
+		$case BCL:
+		$case MOV:
+		$case OUT:
+		$case SUB:
+		$case DIV:
+		$case XOR:
+		$case ROL:
+		$case ROR:
+		$case BTS:
+		$case MOVZ:
+		$case REM:
+		$case IDIV:
+		$case IREM:
+		$case ICMP:
+		$case RTA:
+		$case JMP:
+		$case RJMP:
+		$case PUSH:
+		$case INC:
+		$case CALL:
+		$case RCALL:
+		$case POP:
+		$case LOOP:
+		$case RLOOP:
+		$case INT:
+		$case TLB:
+		$case DEC:
+		$case NOT:
+		$case FLP:
+			return true;
+		$default:
+			return false;
+	$endswitch
+}
+
 fn usz InstructionType.arg_count_rt(self) @deprecated("pls don't use it has runtime cost :(")
 {
 	switch (self)

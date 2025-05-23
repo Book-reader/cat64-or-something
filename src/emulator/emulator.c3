@@ -315,7 +315,9 @@ fn int main(String[] args)
 	{
 		switch (inst::GET_) @jump
 		{
-			case inst::NOP: nextcase;
+			case inst::NOP:
+				logger::panic("Reached NOP (does not exist in fox32rom)");
+				nextcase;
 			case inst::GET:
 				iters ++;
 				if (iters == max_cycles)
@@ -356,19 +358,33 @@ fn int main(String[] args)
 				// $endforeach
 				logger::debug("%s 0x%.8x -> %s", iters, *cpu.inst_ptr, inst);
 
-				@each_width(inst.width; BitWidth $width)
-				{
-					uint addr = *cpu.inst_ptr + 2 + (inst.type.arg_count_rt() >= 1 ? arg_size(inst.src, $width) : 0) + (inst.type.arg_count_rt() >= 2 ? arg_size(inst.dst, $width) : 0) + (inst.has_offset ? 2 : 0);
-					logger::debug("Next instruction at %.8x : %s", addr, (Instruction)cpu.mem_get(addr, 2).get(W16));
-				};
-
 				// Point at the next byte
 				cpu.inst_ptr_next = *cpu.inst_ptr + common::INST_SIZE;
-		
+
+				$if $feature(DEBUG):
+					@each_width(inst.width; BitWidth $width)
+					{
+						uint tmp = cpu.inst_ptr_next;
+						$for var $type = 0; $type < char.max; $type++:
+							$if inst::is_valid_instruction($type):
+								if (inst.type == $type)
+								{
+									cpu.move_forward($width, $type, inst);
+									logger::debug("Next instruction at %.8x : %s", cpu.inst_ptr_next, (Instruction)cpu.mem_get(cpu.inst_ptr_next, 2).get(W16));
+								}
+							$endif
+						$endfor
+						cpu.inst_ptr_next = tmp;
+//						uint addr = *cpu.inst_ptr + 2 + (inst.type.arg_count_rt() >= 1 ? arg_size(inst.src, $width) : 0) + (inst.type.arg_count_rt() >= 2 ? arg_size(inst.dst, $width) : 0) + (inst.has_offset ? 2 : 0);
+//						logger::debug("Next instruction at %.8x : %s", addr, (Instruction)cpu.mem_get(addr, 2).get(W16));
+					};
+				$endif
+
 				// Execute the current instruction
 				nextcase inst.type;
 			case inst::HALT:
 			case inst::BREAK:
+				logger::info("Exiting after %s clock cycles", iters);
 				foreach (i, reg : cpu.regs)
 				{
 					logger::info("%s: %.8x", common::REG_NAMES[i], reg);
@@ -432,6 +448,9 @@ fn int main(String[] args)
 				nextcase inst::GET;
 			case inst::POP:
 				cpu.inst_pop(inst);
+				nextcase inst::GET;
+			case inst::SLA:
+				cpu.inst_sla(inst);
 				nextcase inst::GET;
 			default:
 				logger::error("Instruction %s is not implemented yet", inst.type.get_name());
@@ -583,6 +602,7 @@ fn void Cpu.inst_loop(&self, Instruction inst) @inline => self.@setup(inst, W32,
 	}
 	else
 	{
+		logger::debug("Not looping");
 		self.move_forward(W32, inst::LOOP, inst);
 	}
 }
@@ -600,6 +620,17 @@ fn void Cpu.inst_pop(&self, Instruction inst) @inline => self.@setup_w(inst; Bit
 	logger::debug("Popping into %s", src);
 	self.set_val($width, inst, dst, self._pop($width));
 }
+
+fn void Cpu.inst_sla(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width)
+{
+	// bit manipulation instructions always have W8 src bc 255 > 32bits
+	$typefrom($width.type) src = self.get_val(W8, inst, src);
+	$typefrom($width.type) dst = self.get_val($width, inst, dst);
+	$typefrom($width.type) res = dst << src;
+	self.set_val($width, inst, dst, res);
+	self.flags.zero = res == 0;
+}
+
 
 fn bool Cpu.should_execute(&self, Instruction inst) @inline
 {
@@ -715,11 +746,6 @@ macro Cpu.get_val(&self, BitWidth $width, Instruction inst, #arg) @safemacro
 	}
 }
 
-macro invalid_instruction(...)
-{
-	logger::panic("Invalid instruction 0x%x %s %s %s %s", $vasplat, $vasplat);
-}
-
 macro void @each_width(BitWidth width; @body(BitWidth $width))
 {
 	switch (width)
@@ -779,7 +805,11 @@ macro Cpu.move_forward(&self, BitWidth $width, InstructionType $type, Instructio
 		$case 1:
 			self.inst_ptr_next += arg_size(inst.src, $width);
 		$case 2:
-			self.inst_ptr_next += arg_size(inst.src, $width);
+			$if $type.is_bit_op():
+				self.inst_ptr_next += BitWidth.W8;
+			$else
+				self.inst_ptr_next += arg_size(inst.src, $width);
+			$endif
 			self.inst_ptr_next += arg_size(inst.dst, $width);
 		$case 0:
 	$endswitch
