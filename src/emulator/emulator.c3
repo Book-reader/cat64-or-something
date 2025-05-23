@@ -9,57 +9,6 @@ import std::collections::list;
 
 alias alloc = allocator::mem;
 
-/*interface Addressable
-{
-	fn void free();
-	fn char get(uint address);
-	fn bool contains(uint address);
-	fn void set(uint address, char value);
-	fn char[] get_range(uint address, uint len);
-	fn bool contains_range(uint address, uint len);
-	fn void set_range(uint address, char[] values);
-}
-
-struct MemoryManagementUnit
-{
-	List {Addressable} memory;
-}
-
-fn void MemoryManagementUnit.new_init(&self)
-{
-	self.memory.init(alloc);
-}
-
-fn void MemoryManagementUnit.free(&self)
-{
-	foreach (i : self.memory)
-	{
-		i.free();
-	}
-	self.memory.free();
-}
-
-fn Addressable? MemoryManagementUnit.request(&self, uint address)
-{
-	foreach (mem : self.memory)
-	{
-		if (mem.contains(address)) return mem;
-	}
-	return OUT_OF_BOUNDS?;
-}
-
-fn bool MemoryManagementUnit.contains(&self, uint address) => @ok(self.request(address));
-
-faultdef OUT_OF_BOUNDS, NO_READ, NO_WRITE;
-*/
-
-
-// Quick and dirty for now
-/*struct Mmu
-{
-	int x;
-}*/
-
 fn char[] mmu_get(/*&self, */uint addr, uint len) @inline
 {
 	// cannot have overlap
@@ -113,21 +62,6 @@ fn void Memory.free(&self) //@dynamic
 	mem::free(self.ram);
 	mem::free(self.rom);
 }
-
-/*fn bool Memory.contains(self, uint addr) @inline => addr - self.offset < self.ram.len;
-// TODO: paging, it will also need to be a cpu flag
-fn char Memory.get(self, uint addr) @inline => self.ram[addr-self.offset:len];
-fn void Memory.set(&self, uint addr, char new) @inline => self.ram[addr-self.offset] = new;
-
-fn bool Memory.contains_range(self, uint start_addr, uint len) @inline => self.contains(start_addr) && self.contains(start_addr + len - 1);
-fn char[] Memory.get_range(self, uint start_addr, uint len) @inline => self.ram[start_addr-self.offset:len];
-fn void Memory.set_range(self, uint start_addr, uint len, char[] new) @inline => self.ram[start_addr-self.offset:len] = new[:len];*/
-
-// fn bool Memory._contains(self, uint addr) @inline => addr - self.offset < (uint)self.ram.len;
-
-// fn bool Memory.contains(self, uint start_addr, uint len) @inline => self._contains(start_addr) && self._contains(start_addr + len - 1);
-// fn char[] Memory.get(self, uint start_addr, uint len) @inline => self.ram[start_addr-self.offset:len];
-// fn void Memory.set(self, uint start_addr, uint len, char[] new) @inline => self.ram[start_addr-self.offset:len] = new[:len];
 
 alias Register = uint;
 
@@ -264,25 +198,11 @@ fn int main(String[] args)
 
 
 	cpu.mem_set(common::DEFAULT_INST_PTR, prog.len, prog);
-	// *cpu.inst_ptr = 0;
-	// cpu.mem_set(0, prog.len, prog);
-
-/*	if (args.len > 2)
-	{
-		mem.set(0xff, args[2].len, args[2]);
-	}
-	else
-	{
-		String msg = "Hello, World!\n\0";
-		mem.set(0xff, msg.len, msg);
-	}*/
-
 
 	logger::debug("Executing (%s b): %h", prog.len, prog[:prog.len < 200 ? prog.len : 200]);
 
 	bool running = true;
 
-	// io::printfn("%.4x %.4x %.4x", @common::to_usize(W16, prog[0:2]), @common::to_usize2(W16, prog[0:2]), @common::to_usize3(W16, prog[0:2]));
 
 	$if $feature(PERF):
 		uint iteration = 0;
@@ -309,7 +229,6 @@ fn int main(String[] args)
 					thread::sleep(1000000);
 				$endif
 				*cpu.inst_ptr = cpu.inst_ptr_next;
-				// self.move_forward(inst, width);
 
 				nextcase;
 			case inst::GET_:
@@ -329,12 +248,8 @@ fn int main(String[] args)
 				$endif
 				logger::debug("Nearby mem: %s", cpu.mem_get(*cpu.inst_ptr, 10));
 				
-				// logger::debug("As instrs : %s", @as(Instruction[5]*, @as(char*, cpu.mem_get(*cpu.inst_ptr, 10)))[0][..]);
 				inst = (Instruction)cpu.mem_get(*cpu.inst_ptr, 2).get(W16);
 
-				// $foreach $field : Instruction.membersof:
-				// 	logger::debug("inst.%s = %s", $field.nameof, inst.$eval($field.nameof));
-				// $endforeach
 				logger::debug("%s 0x%.8x -> %s", iters, *cpu.inst_ptr, inst);
 
 				// Point at the next byte
@@ -354,8 +269,6 @@ fn int main(String[] args)
 							$endif
 						$endfor
 						cpu.inst_ptr_next = tmp;
-//						uint addr = *cpu.inst_ptr + 2 + (inst.type.arg_count_rt() >= 1 ? arg_size(inst.src, $width) : 0) + (inst.type.arg_count_rt() >= 2 ? arg_size(inst.dst, $width) : 0) + (inst.has_offset ? 2 : 0);
-//						logger::debug("Next instruction at %.8x : %s", addr, (Instruction)cpu.mem_get(addr, 2).get(W16));
 					};
 				$endif
 
@@ -434,23 +347,6 @@ fn int main(String[] args)
 			default:
 				logger::error("Instruction %s is not implemented yet", inst.type.get_name());
 				nextcase inst::BREAK;
-
-/*			case PRINTI:
-			case MOV:
-			case ADD:
-				// TODO: add directly instead of loading both, adding, and replacing as it will be more efficient
-				@each_width(width; BitWidth $width)
-				{
-					write_reg(0, $width, @as($typefrom($width.type), read_reg(0, $width) + read_reg(1, $width)));
-				};
-			case EXIT:
-				running = false;
-				continue;
-			case NOP:
-				break;
-			default:
-				logger::error("Instruction %s not implemented yet", inst);
-				return 1;*/
 		}
 	}
 	$if $feature(PERF):
@@ -461,6 +357,7 @@ fn int main(String[] args)
 	return 0;
 }
 
+// NOTE: #src and #dst are FUNCTIONS that will be called EVERY TIME they are used
 fn void Cpu.inst_inc(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width, #src, #dst)
 {
 	logger::debug("Incrementing %s", #src);
@@ -500,8 +397,10 @@ fn void Cpu.inst_mov(&self, Instruction inst) @inline => self.@setup_w(inst; Bit
 fn void Cpu.inst_cmp(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width, #src, #dst)
 {
 	logger::debug("Comparing %s and %s", #src, #dst);
-	self.flags.zero = #src == #dst;
-	self.flags.carry = #src > #dst;
+	$typefrom($width.type) src = #src;
+	$typefrom($width.type) dst = #dst;
+	self.flags.zero = src == dst;
+	self.flags.carry = src > dst;
 }
 
 fn void Cpu.inst_jmp(&self, Instruction inst) @inline => self.@setup(inst, W32, false; #src, #dst)
@@ -514,16 +413,17 @@ fn void Cpu.inst_rjmp(&self, Instruction inst) @inline => self.@setup_w(inst, fa
 {
 	logger::debug("Jmping by %s", (int)#src);
 	self.inst_ptr_next += (int)#src - common::INST_SIZE;
-	// self.move_forward($width, inst::JMP, inst);
 }
 
 extern fn CInt putchar(CInt c);
 
 fn void Cpu.inst_out(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width, #src, #dst)
 {
-	if (#dst != 0)
+	$typefrom($width.type) dst = #dst;
+
+	if (dst != 0)
 	{
-		logger::warn("Out to not stdout is not supported yet: 0x%.8x", #dst);
+		logger::warn("Out to not stdout is not supported yet: 0x%.8x", dst);
 	}
 	else
 	{
@@ -533,10 +433,12 @@ fn void Cpu.inst_out(&self, Instruction inst) @inline => self.@setup_w(inst; Bit
 
 fn void Cpu.inst_call(&self, Instruction inst) @inline => self.@setup(inst, W32, false; #src, #dst)
 {
+	// save the value before moving forward so I can push the right value and jmp to the right value
+	uint src = #src;
 	self.move_forward(W32, inst::CALL, inst);
 	self._push(W32, self.inst_ptr_next, false);
-	logger::debug("Calling 0x%.8x", #src);
-	self.inst_ptr_next = #src;
+	logger::debug("Calling 0x%.8x", src);
+	self.inst_ptr_next = src;
 }
 
 fn void Cpu.inst_ret(&self, Instruction inst) @inline => self.@setup(inst, W32, false; #src, #dst)
@@ -550,7 +452,6 @@ fn void Cpu.inst_loop(&self, Instruction inst) @inline => self.@setup(inst, W32,
 {
 	if ((*self.loop_ptr -= 1) != 0)
 	{
-		// $typefrom(BitWidth.W32.type) src = self.get_val(W32, inst, src);
 		logger::debug("Looping to 0x%.8x", #src);
 		self.inst_ptr_next = #src;
 	}
@@ -563,19 +464,13 @@ fn void Cpu.inst_loop(&self, Instruction inst) @inline => self.@setup(inst, W32,
 
 fn void Cpu.inst_push(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width, #src, #dst)
 {
-	// $typefrom($width.type) src = self.get_val($width, inst, src);
 	logger::debug("Pushing %s %.8x", #src, #src);
 	self._push($width, #src, false);
 }
 
 // TODO: I don't know if set_val(src) is correct, I should check it
-// TODO: I don't know if the #src from the macro will be optimised out, I could check with a println or ask in #beginner-help,
-//       and if not, try @pure, and if that doesn't work, add 'macro bool InstructionType.auto_args($self)' so it can be $if'd
-//       TODO: check the same for inst_pop, inst_ret, and inst_loop (don't call get_val if loop_ptr is 0, *maybe* could be optimised by the compiler ask?)
-//       TODO: ask in #beginner-help if @pure could allow 'int x = some_func(&a)' to be optimised out or if it would be done without
 fn void Cpu.inst_pop(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width, #src, #dst)
 {
-	// $typefrom($width.type) src = self.get_val($width, inst, src);
 	logger::debug("Popping into %s", #src);
 	self.set_val($width, inst, SRC, self._pop($width));
 }
@@ -583,8 +478,6 @@ fn void Cpu.inst_pop(&self, Instruction inst) @inline => self.@setup_w(inst; Bit
 fn void Cpu.inst_sla(&self, Instruction inst) @inline => self.@setup_w(inst; BitWidth $width, #src, #dst)
 {
 	// bit manipulation instructions always have W8 src bc 255 > 32bits
-	// $typefrom($width.type) src = self.get_val(W8, inst, src);
-	// $typefrom($width.type) dst = self.get_val($width, inst, dst);
 	$typefrom($width.type) res = #dst << #src;
 	self.set_val($width, inst, DST, res);
 	self.flags.zero = res == 0;
@@ -668,28 +561,31 @@ macro Cpu.@args(&self, Instruction inst, InstructionType $type, BitWidth $width;
 		$case 0:
 			@body(no_params($type, SRC), @no_param($type, DST));
 		$case 1:
-			$typefrom($width.type) src = self.get_val($width, inst, SRC);
-			@body(src, no_param($type, DST));
+			// $typefrom($width.type) src = self.get_val($width, inst, SRC);
+			// @body(src, no_param($type, DST));
+			@body(self.get_val($width, inst, SRC), no_param($type, DST));
 		$case 2:
 			$if $type.is_bit_op():
 				$typefrom($width.type) src = self.get_val(W8, inst, SRC);
+				// @body(self.get_val(W8, inst, SRC), self.get_val($width, inst, DST));
 			$else
 				$typefrom($width.type) src = self.get_val($width, inst, SRC);
+				// @body(self.get_val($width, inst, SRC), self.get_val($width, inst, DST));
 			$endif
 			$typefrom($width.type) dst = self.get_val($width, inst, DST);
 			@body(src, dst);
+		$default:
+			$error("What");
 	$endswitch
 }
 
-macro no_param(InstructionType $type, ArgPos $pos) { $error("Instruction " +++ $type.get_name() +++ " does not have parameter " +++ $pos.name); }
 // only to be used in the above Cpu.@args
-// macro @no_params(#param) { $error("Cannot use the " +++ $stringify(#param) +++ " parameter in an instruction without parameters"); }
-// macro no_second_param() { $error("Cannot use the dst parameter in an instruction with only src"); }
+macro no_param(InstructionType $type, ArgPos $pos) { $error("Instruction " +++ $type.get_name() +++ " does not have parameter " +++ $pos.name); }
 
 <*
 	@require $typeof(val).typeid == $width.type
 *>
-macro Cpu.set_val(&self, BitWidth $width, Instruction inst, ArgPos $arg, val, bool $zero = false) @safemacro
+macro Cpu.set_val(&self, BitWidth $width, Instruction inst, ArgPos $arg, val, bool $zero = false)
 {
 	uint offset = @arg_offset($width, inst, $arg);
 	// logger::debug("Current idx is %s, calculated offset is %s", self.inst_ptr_next, offset);
@@ -713,7 +609,7 @@ macro Cpu.set_val(&self, BitWidth $width, Instruction inst, ArgPos $arg, val, bo
 <*
 	@ensure $typeof(return).typeid == $width.type
 *>
-macro Cpu.get_val(&self, BitWidth $width, Instruction inst, ArgPos $arg) @safemacro
+macro Cpu.get_val(&self, BitWidth $width, Instruction inst, ArgPos $arg)
 {
 	uint offset = @arg_offset($width, inst, $arg);
 	// logger::debug("Current idx is %s, calculated offset is %s", self.inst_ptr_next, offset);
@@ -750,32 +646,6 @@ macro @as_width(BitWidth $width, #expr, bool $signed = false)
 		return @as($typefrom($width.itype), #expr);
 	$else
 		return @as($typefrom($width.type), #expr);
-	$endif
-}
-
-macro Cpu.read_imm(&self, uint $offset, BitWidth $width, bool $signed = false)
-{
-	$if $signed:
-		return @as($typefrom($width.itype),  self.mem_get(*self.inst_ptr + $offset, $width).get($width));
-	$else
-		return @as($typefrom($width.itype), self.mem_get(*self.inst_ptr + $offset, $width).get($width));
-	$endif
-}
-
-<*
- @require @typeis(value, $typefrom($width.type)) ||| @typeis(value, $typefrom($width.itype))
-*>
-macro void Cpu.write_reg(&self, uint offset, BitWidth $width, value)
-{
-	self.regs[self.mem_get(*self.inst_ptr + offset, 1).get(W8)].write($width, value);
-}
-
-macro Cpu.read_reg(&self, uint offset, BitWidth $width, bool $signed = false)
-{
-	$if $signed:
-		return @as($typefrom($width.itype), self.regs[self.mem_get(*self.inst_ptr + offset, 1).get(W8)].read($width));
-	$else
-		return @as($typefrom($width.type), self.regs[self.mem_get(*self.inst_ptr + offset, 1).get(W8)].read($width));
 	$endif
 }
 

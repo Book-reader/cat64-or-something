@@ -29,8 +29,6 @@ const String[NUM_REGISTERS] REG_NAMES = {
 const PTR_SIZE = 4; // Int
 $assert usz.sizeof >= PTR_SIZE : "Must be on at least a 32 bit system";
 
-// alias InstSize = ushort;
-
 bitstruct Instruction (Printable) : ushort @littleendian
 {
 	ArgType src : 0..1;
@@ -39,12 +37,6 @@ bitstruct Instruction (Printable) : ushort @littleendian
 	bool has_offset : 7;
 	InstructionType type : 8..13;
 	BitWidth width : 14..15;
-/*	BitWidth width : 0..1;
-	InstructionType type : 2..7;
-	bool has_offset : 8;
-	Condition cond : 9..11;
-	ArgType src : 12..13;
-	ArgType dst : 14..15;*/
 }
 
 const INST_SIZE = 2;
@@ -194,125 +186,28 @@ macro @eachif_arr(value, $values, #attribute = null, $failable = true; @body($ma
 }
 
 
-//macro char[].get(self, BitWidth $width) => self.$eval("as_" +++ $width.nameof)();
 <*
  @require values::@is_int(val) && !$defined(*val)
  @require $typeof(val).typeid == $width.type ||| $typeof(val).typeid == $width.itype
 *>
 macro void char[].set(self, BitWidth $width, val) => self[:$width] = @as(char*, &val)[:$width];
-//self.$eval("set_" +++ $width.nameof)(val);
 
+<*
+	this doesn't work due to compiler missing feature:
+	@ensure $typeof(return).typeid == $width.type
+*>
 macro char[].get(self, BitWidth $width)
 {
   $switch $width:
     $case W8:
-      return self[0];
+      return (char)self[0];
 	$case W16:
-		return bitorder::read(self, UShortLE);
+		return (ushort)bitorder::read(self, UShortLE);
 	$case W32:
-		return bitorder::read(self, UIntLE);
-/*    $default:
-      
-      char[] data = {0, 0, 0, 0, 0, 0, 0, 0};
-      //$for (var $i = 0; $i < $width; $i++)
-      // data[$i] = self[$i];
-      //$endfor
-      data[:$width] = self[:$width];
-      logger::debug("reading value %s from %s", @as($typefrom($width.itype), *@as($typefrom($width.type)*, @as(char*, data))), data);
-      return *@as($typefrom($width.type)*, @as(char*, data));// *(@as($typefrom($width.type)*, @as(char*, self[:$width]));
-//    $case W32:
-//      return
-*/
+		return (uint)bitorder::read(self, UIntLE);
   $endswitch
 }
 
-/*// TODO: replace all these methods with `$switch` in `char[].as($width)`
-fn char char[].as_W8(self) => self[0];
-
-fn ushort char[].as_W16(self) => *@as(ushort*, @as(char*, self[0:2]));
-
-fn uint char[].as_W32(self) => *@as(uint*, @as(char*, self[0:4]));
-
-fn ulong char[].as_W64(self) => *@as(ulong*, @as(char*, self[0:8]));
-*/
-
-module common;// @if(!env::X86_64);
-
-/*
-fn void char[].set_W8(self, char val) => self[0] = val;
-
-fn void char[].set_W16(self, ushort val)
-{
-  self[0] = @as(char, val);
-  self[1] = @as(char, val >> 8);
-}
-fn void char[].set_W32(self, uint val)
-{
-  self[0] = @as(char, val);
-  self[1] = @as(char, val >> 8);
-  self[2] = @as(char, val >> 16);
-  self[3] = @as(char, val >> 24);
-}
-
-/*fn void char[].set_W64(self, ulong val)
-{
-  self[0] = @as(char, val);
-  self[1] = @as(char, val >> 8);
-  self[2] = @as(char, val >> 16);
-  self[3] = @as(char, val >> 24);
-  self[4] = @as(char, val >> 32);
-  self[5] = @as(char, val >> 40);
-  self[6] = @as(char, val >> 48);
-  self[7] = @as(char, val >> 56);
-}*/
-fn void char[].set_W64(self, ulong val)
-{
-	self[:BitWidth.W64] = @as(char*, &val)[:BitWidth.W64];
-}*/
-
-module common @if(false);// @if(env::X86_64);
-
-
-/*
-fn char char[].get
-
-// TODO: Test which is faster:
-fn ulong char[].get_W64(char[] self) @naked @noinline
-{
-	char* s = self;
-	asm
-	{
-		movq $rax, [s];
-		ret;
-	}
-	unreachable();
-}
-
-fn ulong char[].get_W64(char[] self) @naked @inline
-{
-	char* s = self;
-	ulong ret;
-	asm
-	{
-		movq ret, [s];
-		ret;
-	}
-	return ret;
-}*/
-
-fn void char[].set_W64(self, ulong val)
-{
-	char* s = self;
-	asm
-	{
-		movq [s], val;
-	}
-}
-
-// module common::cond;
-
-// const ALWAYS = 0b000;
-// const IFZ = 
 
 module common::inst;
 import logger;
